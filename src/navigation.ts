@@ -1,4 +1,5 @@
 import { rooms } from './worldData.ts';
+import { desks, roomLocal, meetingSeat, lunchSeat } from './officeLayout.ts';
 
 export type Point = [number, number];
 type Rect = { x: number; z: number; w: number; d: number };
@@ -6,36 +7,39 @@ export const ROOM_DEPTH = 4.9;
 export const ROOM_WIDTH = 4.65;
 const radius = 0.25;
 const step = 0.2;
-const minX = -9.6, minZ = -5.4, columns = 97, rows = 55;
+const minX = -9.6, minZ = -5.4, columns = 97, rows = 70;
 const obstacles: Rect[] = [];
 const add = (x: number, z: number, w: number, d: number) => obstacles.push({ x, z, w, d });
 
-// The two rows open onto the shared central corridor. Footprints include chairs.
+// Chairs are interaction anchors; solid desks, tables and walls block travel.
 for (const room of rooms) {
   const [x, z] = room.center;
-  const doorSide = room.id < 4 ? 1 : -1;
+  const doorSide = room.center[1] < 0 ? 1 : -1;
   add(x - ROOM_WIDTH / 2, z, 0.16, ROOM_DEPTH);
   add(x + ROOM_WIDTH / 2, z, 0.16, ROOM_DEPTH);
-  add(x, z - doorSide * ROOM_DEPTH / 2, ROOM_WIDTH, 0.16);
+  if (room.id === 0) {
+    add(x-1.825,z-doorSide*ROOM_DEPTH/2,1,.16);
+    add(x+1.825,z-doorSide*ROOM_DEPTH/2,1,.16);
+  } else add(x, z - doorSide * ROOM_DEPTH / 2, ROOM_WIDTH, 0.16);
   add(x - 1.52, z + doorSide * ROOM_DEPTH / 2, 1.45, 0.16);
   add(x + 1.52, z + doorSide * ROOM_DEPTH / 2, 1.45, 0.16);
   const item = (dx: number, dz: number, w: number, d: number) => add(x + doorSide * dx, z + doorSide * dz, w, d);
-  const desk = (dx: number, dz: number) => { item(dx, dz, 1.45, 0.76); item(dx, dz + 0.83, 0.55, 0.6); };
   switch (room.id) {
-    case 0: item(0, -0.65, 2.25, 0.85); item(1.2, -0.9, 0.55, 0.6); break;
-    case 1: desk(-0.85, -0.7); desk(0.95, -0.7); break;
-    case 2: item(0, -0.2, 1.48, 1.48); item(-1.15, -0.55, 0.6, 0.55); item(1.15, -0.55, 0.6, 0.55); item(0, -1.15, 0.55, 0.6); item(0, 0.95, 0.55, 0.6); break;
-    case 3: desk(-0.95, -0.75); item(1.05, -1.25, 0.85, 0.65); break;
-    case 4: desk(-0.95, -0.85); desk(0.85, -0.85); item(1.65, -1.3, 0.46, 1.2); break;
-    case 5: item(-0.65, -0.9, 1.55, 0.8); item(0.45, 0.25, 1.04, 1.04); item(1.35, -0.7, 0.65, 0.65); break;
-    case 6: item(-1.15, -1.2, 0.72, 0.95); item(0.1, -1.2, 0.72, 0.95); desk(1.25, 0.45); break;
-    case 7: desk(-0.35, -0.85); item(1.15, -1.55, 1.55, 0.8); break;
+    case 0: add(-7.35,3.5,2.25,.8); item(1.68,.3,.6,1.42); item(-1.83,-1.85,.4,.4); break;
+    case 1: item(1.7,-1.92,.6,.43); break;
+    case 2: item(0,-.1,1.35,2.5); break;
+    case 3: item(1.3,-1.3,1.03,.12); item(1.75,.3,.6,.43); break;
+    case 4: item(1.74,-1.25,.6,.43); break;
+    case 5: item(0,-.1,1.35,2.5); item(0,-1.96,3.68,.64); break;
+    case 6: item(-1.2,-1.23,.7,.87); item(-.25,-1.23,.7,.87); break;
+    case 7: item(1.5,-.65,.54,1.25); item(1.8,-1.92,.6,.43); break;
   }
-  if (room.id !== 6) item(room.id === 2 || room.id === 3 ? 1.6 : -1.6, -1.95, 0.55, 0.55);
+  if (![0,5,6].includes(room.id)) item(room.id === 2 || room.id === 3 ? 1.75 : -1.75,-2,.4,.4);
 }
+desks.forEach(d=>add(d.x,d.z,1.45,.76));
 
 export function isWalkable([x, z]: Point): boolean {
-  return Number.isFinite(x) && Number.isFinite(z) && x >= minX && x <= 9.6 && z >= minZ && z <= 5.4 &&
+  return Number.isFinite(x) && Number.isFinite(z) && x >= minX && x <= 9.6 && z >= minZ && z <= 8.4 && (z<=5.55 || (x>=-9.5 && x<=-5.2)) &&
     !obstacles.some((o) => Math.abs(x - o.x) < o.w / 2 + radius && Math.abs(z - o.z) < o.d / 2 + radius);
 }
 const pointAt = (i: number): Point => [minX + (i % columns) * step, minZ + Math.floor(i / columns) * step];
@@ -55,12 +59,13 @@ export function roomAt([x, z]: Point): number | null {
   return rooms.find((r) => Math.abs(x - r.center[0]) < ROOM_WIDTH / 2 && Math.abs(z - r.center[1]) < ROOM_DEPTH / 2)?.id ?? null;
 }
 export function station(roomId: number, index: number): Point {
-  const [x, z] = rooms[roomId].center;
-  // Individual standing spots keep the team readable in shared rooms.
-  return nearestWalkable([x + [-1.25, 0, 1.25][index % 3], z + (roomId < 4 ? 1 : -1) * (index < 3 ? 1.7 : 0.85)]);
+  if(roomId===2) return meetingSeat(index%6).position;
+  if(roomId===5) return lunchSeat(index%6).position;
+  return nearestWalkable(roomLocal(roomId,[-1.25,0,1.25][index%3],index<3?1.7:.9));
 }
 
 export function findPath(from: Point, to: Point): Point[] {
+  if(Math.hypot(from[0]-to[0],from[1]-to[1])<.00001) return [];
   const start = nearestIndex(from), goal = nearestIndex(to);
   const previous = new Int32Array(free.length).fill(-1);
   const queue = [start];
@@ -79,6 +84,7 @@ export function findPath(from: Point, to: Point): Point[] {
   for (let cursor = goal; cursor !== start; cursor = previous[cursor]) route.push(pointAt(cursor));
   route.push(pointAt(start));
   route.reverse();
+  if(isWalkable(to) && Math.hypot(route[route.length-1][0]-to[0],route[route.length-1][1]-to[1])>.00001) route.push([...to]);
   if (Math.hypot(route[0][0] - from[0], route[0][1] - from[1]) < 0.00001) route.shift();
   return route;
 }

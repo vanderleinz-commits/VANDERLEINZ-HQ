@@ -1,7 +1,9 @@
 import { staff } from './worldData.ts';
-import { findPath, roomAt, station } from './navigation.ts';
+import { findPath, roomAt } from './navigation.ts';
 import type { Point } from './navigation.ts';
+import { activityGoal, officeOpen } from './simulation.ts';
 import type { Simulation } from './simulation.ts';
+import { lunchSeat, meetingSeat } from './officeLayout.ts';
 
 export type InteractionKind = 'chat' | 'brainstorm' | 'encourage';
 export const interactionLabels: Record<InteractionKind, string> = { chat: 'Ngobrol santai', brainstorm: 'Brainstorm bersama', encourage: 'Beri semangat' };
@@ -17,7 +19,9 @@ export function initialBonds(): Record<string, number> {
   return bonds;
 }
 export const encounterFor = (s: Simulation, index: number) => s.encounters.find((e) => e.participants.includes(index));
-export const interactionGoal = (e: Encounter, index: number): Point => station(e.roomId, e.slot + (e.participants[0] === index ? 0 : 3));
+export const interactionGoal = (e: Encounter, index: number): Point => (e.roomId === 2 ? meetingSeat : lunchSeat)(e.slot + (e.participants[0] === index ? 0 : 3)).position;
+const dailyMeetingActive = (sim: Simulation) => sim.meeting.phase === 'gathering' || sim.meeting.phase === 'discussing';
+const available = (sim: Simulation, index: number) => Number.isInteger(index) && index >= 0 && index < 6 && sim.npcs[index]?.presence === 'inside';
 
 const ideas = ['Kita rapikan alur kerja, yuk.', 'Bagaimana kalau pakai warna lebih hangat?', 'Tim juga butuh ruang untuk bernapas.', 'Aku sudah menemukan pola yang menarik.', 'Kita rayakan langkah kecil hari ini.', 'Sistemnya bisa kita buat lebih sederhana.'];
 const replies = ['Aku bantu susun langkahnya.', 'Aku bisa buatkan sketsanya!', 'Aku akan ajak tim ikut mencoba.', 'Mari kita cek hasilnya bersama.', 'Siap, kita kerjakan pelan-pelan.', 'Aku bantu bagian teknisnya.'];
@@ -31,13 +35,14 @@ export function dialogueFor(e: Encounter): { speaker: number; text: string } {
 }
 
 export function requestInteraction(sim: Simulation, a: number, b: number, kind: InteractionKind, roomOverride?: number): Simulation {
-  if (![a, b].every((i) => Number.isInteger(i) && i >= 0 && i < 6) || a === b || !Object.hasOwn(interactionLabels, kind) || encounterFor(sim, a) || encounterFor(sim, b)) return sim;
+  if (!officeOpen(sim.gameMinute) || dailyMeetingActive(sim) || ![a, b].every((i) => available(sim, i)) || a === b || !Object.hasOwn(interactionLabels, kind) || encounterFor(sim, a) || encounterFor(sim, b)) return sim;
   const roomId = roomOverride === 2 || roomOverride === 5 ? roomOverride : kind === 'brainstorm' ? 2 : 5;
+  if (roomId === 2 && sim.gameMinute >= 720 && sim.gameMinute < 780) return sim;
   const used = sim.encounters.filter((e) => e.roomId === roomId).map((e) => e.slot);
   const slot = [0, 1, 2].find((i) => !used.includes(i));
   if (slot === undefined) return sim;
   const e: Encounter = { id: sim.nextEncounterId, participants: [a, b], kind, roomId, slot, phase: 'approach', elapsed: 0, timeout: nowOf(sim) + 100 };
-  const npcs = sim.npcs.map((npc, i) => i === a || i === b ? { ...npc, override: null, destination: roomId, path: findPath(npc.position, interactionGoal(e, i)) } : npc);
+  const npcs = sim.npcs.map((npc, i) => i === a || i === b ? { ...npc, override: null, errandUntil: 0, destination: roomId, path: findPath(npc.position, interactionGoal(e, i)) } : npc);
   return { ...sim, npcs, encounters: [...sim.encounters, e], nextEncounterId: sim.nextEncounterId + 1,
     events: [`${staff[a].name} & ${staff[b].name} → ${interactionLabels[kind].toLowerCase()}`, ...sim.events].slice(0, 6) };
 }
@@ -45,17 +50,25 @@ export function requestInteraction(sim: Simulation, a: number, b: number, kind: 
 export function cancelInteraction(sim: Simulation, index: number): Simulation {
   const e = encounterFor(sim, index);
   if (!e) return sim;
-  return { ...sim, encounters: sim.encounters.filter((item) => item.id !== e.id),
-    npcs: sim.npcs.map((npc, i) => e.participants.includes(i) ? { ...npc, path: findPath(npc.position, station(npc.destination, i)), nextSocialAt: nowOf(sim) + 45 } : npc),
+  const remaining = { ...sim, encounters: sim.encounters.filter((item) => item.id !== e.id) };
+  return { ...remaining,
+    npcs: sim.npcs.map((npc, i) => e.participants.includes(i) ? { ...npc, path: findPath(npc.position, activityGoal(remaining, i)), nextSocialAt: nowOf(sim) + 45 } : npc),
     events: [`${staff[e.participants[0]].name} & ${staff[e.participants[1]].name} kembali ke kegiatan masing-masing.`, ...sim.events].slice(0, 6) };
 }
 
 export function advanceSocial(sim: Simulation, elapsed: number): Simulation {
+  if (elapsed <= 0) return sim;
+  if (!officeOpen(sim.gameMinute) || dailyMeetingActive(sim)) {
+    let released = sim;
+    for (const encounter of sim.encounters) released = cancelInteraction(released, encounter.participants[0]);
+    return released;
+  }
   let result = { ...sim, npcs: sim.npcs.map((n) => ({ ...n })), encounters: [] as Encounter[], bonds: { ...sim.bonds }, events: [...sim.events] };
   const now = nowOf(sim);
   for (const encounter of sim.encounters) {
     const [a, b] = encounter.participants, first = result.npcs[a], second = result.npcs[b];
-    const ready = !first.path.length && !second.path.length && roomAt(first.position) === encounter.roomId && roomAt(second.position) === encounter.roomId && Math.hypot(first.position[0] - second.position[0], first.position[1] - second.position[1]) < 2.1;
+    if (!available(result, a) || !available(result, b)) continue;
+    const ready = !first.path.length && !second.path.length && roomAt(first.position) === encounter.roomId && roomAt(second.position) === encounter.roomId && Math.hypot(first.position[0] - second.position[0], first.position[1] - second.position[1]) < 2.8;
     let e = { ...encounter };
     if (e.phase === 'approach' && ready) {
       e = { ...e, phase: 'talking', elapsed: 0 };
@@ -77,21 +90,21 @@ export function advanceSocial(sim: Simulation, elapsed: number): Simulation {
       for (const index of [a, b]) {
         const npc = result.npcs[index];
         npc.nextSocialAt = Math.ceil((now + 65) / 20) * 20;
-        npc.path = findPath(npc.position, station(npc.destination, index));
+        npc.path = findPath(npc.position, activityGoal(result, index));
       }
     } else result.encounters.push(e);
   }
-  // Available pairs socialize naturally in shared rooms; work and personal orders take priority.
+  // Lunch and short breaks give workers time to talk; Amanda stays at reception.
   for (let a = 0; a < 6; a++) {
     const first = result.npcs[a];
-    if (first.path.length || first.override || first.nextSocialAt > now || encounterFor(result, a) || first.activity === 'work') continue;
+    if (!available(result, a) || first.path.length || first.override || first.nextSocialAt > now || encounterFor(result, a) || !['lunch', 'break'].includes(first.activity)) continue;
     const room = roomAt(first.position);
-    if (room !== 2 && room !== 5) continue;
+    if (room !== 5) continue;
     const candidates = Array.from({ length: 5 - a }, (_, i) => a + i + 1).sort((b, c) => result.bonds[bondKey(a, b)] - result.bonds[bondKey(a, c)]);
     for (const b of candidates) {
       const second = result.npcs[b];
-      if (second.path.length || second.override || second.nextSocialAt > now || encounterFor(result, b) || second.activity === 'work' || roomAt(second.position) !== room) continue;
-      const kind = room === 2 ? 'brainstorm' : first.energy < 45 || second.energy < 45 ? 'encourage' : 'chat';
+      if (!available(result, b) || second.path.length || second.override || second.nextSocialAt > now || encounterFor(result, b) || !['lunch', 'break'].includes(second.activity) || roomAt(second.position) !== room) continue;
+      const kind = first.energy < 45 || second.energy < 45 ? 'encourage' : 'chat';
       result = requestInteraction(result, a, b, kind, room);
       break;
     }

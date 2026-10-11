@@ -300,3 +300,29 @@ button:disabled { opacity: .5; cursor: default; }
   .npc-detail { top: 124px; max-height: calc(100dvh - 235px); }
   .avatar-actions { bottom: 134px; }
 }
+/* The working office agenda */
+.live-dot.closed { background:#9ba6b1; box-shadow:0 0 0 3px #9ba6b122; }
+.staff-status.offsite i { background:#b4bec4; }
+.clock-card { height:80px; grid-template-rows:1fr 12px 9px; }
+.agenda-toggle { grid-column:1/4; grid-row:2; display:block; margin:0 auto; padding:0; border:0; background:none; color:#607e89; font-size:9px; cursor:pointer; }
+.time-caption { grid-row:3; }
+.office-agenda { margin:14px 0; padding:14px; border:1px solid #dfdfd2; border-radius:14px; background:#f5f2e8; }
+.agenda-heading { display:flex; flex-wrap:wrap; gap:8px; justify-content:space-between; font-size:12px; }
+.agenda-heading span { color:#6f897a; font-size:10px; }
+.agenda-timeline { margin:14px 0; display:grid; gap:11px; }
+.agenda-timeline div { display:flex; align-items:center; gap:13px; font-size:11px; }
+.agenda-timeline time { font-weight:800; color:#6b8994; }
+.daily-meeting { padding:12px; border-radius:10px; background:#e3eceb; font-size:12px; }
+.daily-meeting p { margin:6px 0; font-size:11px; }
+.daily-meeting small,.agenda-week { display:block; color:#7a8c88; font-size:10px; line-height:1.6; }
+.daily-meeting button { display:block; margin-top:10px; background:#f9f7ee; border:1px solid #c8d4d2; border-radius:7px; padding:7px 10px; color:#587681; font-size:11px; cursor:pointer; }
+.daily-meeting progress { width:100%; margin-top:10px; accent-color:#789d98; }
+.agenda-week { margin-top:11px; }
+@media(max-width:760px) {
+  .clock-card { height:76px; } .selected-room-tag { bottom:109px; } .camera-hint { bottom:94px; }
+  .activity-feed { left:10px; right:10px; width:calc(100% - 20px); display:flex; align-items:center; gap:10px; padding:6px 10px; }
+  .activity-feed > .eyebrow { display:none; }
+  .activity-feed p { flex:1; margin:0; line-height:1.35; }
+  .activity-feed button { white-space:nowrap; font-size:8px; }
+}
+@media(max-height:800px) and (min-width:761px) { .right-panel { top:103px; padding:17px; } .staff-row { min-height:38px; padding:6px 0; } .room-description { margin:8px 0; } .right-divider { margin:13px 0; } .room-metric { margin:10px 0; } }
