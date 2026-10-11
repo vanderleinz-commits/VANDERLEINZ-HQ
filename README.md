@@ -94,4 +94,3 @@ Rincian pose, pemicu tiap ruangan, struktur, dan tahap berikutnya: [ANIMATION_PL
 - `src/SpeechBubble.tsx`: gelembung dialog 3D.
 - `src/App.tsx`: dunia 3D, kamera, input, dan panel permainan.
 - `tests/simulation.test.ts`, `tests/social.test.ts`: 17 pengujian perilaku.
-
