@@ -25,7 +25,7 @@ export type Simulation={
  reception:ReceptionState;computerIssues:ComputerIssue[];clients:ClientState[];rng:number;nextManagementAt:number;nextIssueAt:number;nextClientAt:number;managementRound:number;completedDuties:Record<DutyKind,number>;
 };
 export type SaveData={version:5;simulation:Simulation;roomId:number;mode:'director'|'avatar';avatar:Point;speed:number;reducedMotion:boolean;savedAt:string;floorView:0|1|'all'};
-export const SAVE_KEY='vanderleinz-hq-milestone-5',PREVIOUS_KEY='vanderleinz-hq-milestone-4',LEGACY_KEY='vanderleinz-hq-milestone-1';
+export const SAVE_KEY='blue-and-space-hq-v1',PREVIOUS_KEY='vanderleinz-hq-milestone-5',LEGACY_KEY='vanderleinz-hq-milestone-1';
 export const DAY_NAMES=['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
 export const weekdayName=(day:number)=>DAY_NAMES[(Math.max(1,Math.floor(day))-1)%7];
 export const weekday=weekdayName;
@@ -99,7 +99,7 @@ export function meetingDialogue(s:Simulation):{speaker:number;text:string}|null 
 export function routineDialogue(s:Simulation,i:number):{speaker:number;text:string}|null {
  if(s.reception.person!==null&&(i===6||!s.reception.client&&i===s.reception.person)){
   const r=s.reception,who=r.client?s.clients[r.person!]?.name:s.npcs[r.person!]?.name;
-  return {speaker:6,text:r.mode==='out'?'Terima kasih, '+who+'. Absen pulang dicatat.':r.client?'Selamat datang di VANDERLEINZ HQ! Silakan isi buku tamu.':'Selamat pagi, '+who+'. Silakan isi absen dahulu.'};
+  return {speaker:6,text:r.mode==='out'?'Terima kasih, '+who+'. Absen pulang dicatat.':r.client?'Selamat datang di Blue and Space! Silakan isi buku tamu.':'Selamat pagi, '+who+'. Silakan isi absen dahulu.'};
  }
  const atlas=s.npcs[0].duty;if(atlas?.kind==='private'&&atlas.phase==='active'&&(i===0||i===7))return {speaker:Math.floor(atlas.elapsed/4)%2?7:0,text:Math.floor(atlas.elapsed/4)%2?'Baik, Atlas. Kita prioritaskan proyek dan dukung timnya.':'Akbar, progres proyek sudah aku rangkum. Mari cek langkah berikutnya.'};
 
@@ -275,7 +275,7 @@ export function parseSave(json:string|null):SaveData {
   const reservations=new Set<string>();for(const n of s.npcs){if(!n.duty||!['read','toilet','drink','cook','hr'].includes(n.duty.kind))continue;const key=n.duty.kind+':'+n.duty.target;if(reservations.has(key))n.duty=null;else reservations.add(key);}
   const bonds=record(raw.bonds);for(const key of Object.keys(s.bonds))s.bonds[key]=finite(bonds[key],0,100,25);
   s.completedInteractions=Math.floor(finite(raw.completedInteractions,0,1e9,0));s.nextEncounterId=Math.floor(finite(raw.nextEncounterId,1,1e9,1));
-  if(Array.isArray(raw.events))s.events=raw.events.filter((e):e is string=>typeof e==='string'&&e.length>0&&e.length<=240).slice(0,8);
+  if(Array.isArray(raw.events))s.events=raw.events.filter((e):e is string=>typeof e==='string'&&e.length>0&&e.length<=240).slice(0,8).map(e=>e.replace(/VANDERLEINZ(?: AI)?(?: HQ)?/gi,'Blue and Space'));
   if(version===5){
    const r=record(raw.reception);
    if(Array.isArray(r.log))s.reception.log=r.log.slice(0,24).flatMap(v=>{const e=record(v);return typeof e.name==='string'&&e.name.length<100&&['in','out','client'].includes(String(e.kind))?[{day:Math.floor(finite(e.day,1,s.gameDay,s.gameDay)),name:e.name,kind:e.kind as AttendanceEntry['kind'],at:finite(e.at,0,1440,0)}]:[];});
@@ -300,5 +300,5 @@ export function parseSave(json:string|null):SaveData {
 }
 export function loadGame():SaveData {
 
- try{return parseSave(localStorage.getItem(SAVE_KEY)??localStorage.getItem(PREVIOUS_KEY)??localStorage.getItem('vanderleinz-hq-milestone-3')??localStorage.getItem('vanderleinz-hq-milestone-2')??localStorage.getItem(LEGACY_KEY));}catch{return defaultSave();}
+ try{return parseSave(localStorage.getItem(SAVE_KEY)??localStorage.getItem(PREVIOUS_KEY)??localStorage.getItem('vanderleinz-hq-milestone-4')??localStorage.getItem('vanderleinz-hq-milestone-3')??localStorage.getItem('vanderleinz-hq-milestone-2')??localStorage.getItem(LEGACY_KEY));}catch{return defaultSave();}
 }

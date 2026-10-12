@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
-export function SpeechBubble({ name, text, color }: { name: string; text: string; color: string }) {
+export function SpeechBubble({ name, text, color, compact = false }: { name: string; text: string; color: string; compact?: boolean }) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 172;
     const ctx = canvas.getContext('2d');
@@ -21,5 +21,5 @@ export function SpeechBubble({ name, text, color }: { name: string; text: string
     const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace; return map;
   }, [name, text, color]);
   useEffect(() => () => texture.dispose(), [texture]);
-  return <sprite position={[0, 2.13, 0]} scale={[2.95, 0.99, 1]} renderOrder={25}><spriteMaterial map={texture} transparent depthTest={false} depthWrite={false} toneMapped={false} /></sprite>;
+  return <sprite position={[0, 2.13, 0]} scale={compact ? [1.7, .57, 1] : [2.95, 0.99, 1]} renderOrder={25}><spriteMaterial map={texture} transparent depthTest={false} depthWrite={false} toneMapped={false} /></sprite>;
 }

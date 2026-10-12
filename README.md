@@ -1,23 +1,25 @@
-# VANDERLEINZ-HQ
+# Blue and Space Headquarters
 
-## AI HQ — Office Tycoon Simulator
+**Phase 01 · Visual Foundation — version 0.6.0**
 
-## Milestone 5: dua lantai dan rutinitas kantor
+A little office. A world of possibility.
 
-Kantor 3D miniatur dengan **dua lantai, sebelas ruangan, delapan staf**, mode Director/Avatar, waktu dipercepat, local save, dan HQ Credits virtual. Palet biru pastel, cream, dan kayu menjaga suasana cozy. Dibangun memakai React, TypeScript, React Three Fiber, dan Three.js. Geometri karakter, dialog scripted, animasi, dan simulasi berjalan lokal tanpa AI API, API key, akun, atau pembayaran nyata.
+![Blue and Space Headquarters](docs/previews/office-phase01.jpg)
 
-## Menjalankan
+Blue and Space adalah kantor miniatur 3D dengan identitas **Premium Cozy Stylized 3D**: biru yang tenang, permukaan cream, kayu hangat, tanaman, serta karakter manusia bergaya yang ekspresif. React, TypeScript, React Three Fiber, dan Three.js menjalankan dunia dan animasi di browser. Karakter, dialog, dan kegiatan memakai aturan scripted lokal tanpa AI API.
 
-Buka terminal di folder proyek ini:
+Phase 01 membentuk sistem grafis, karakter, dan animasi yang bisa dipakai ulang. Kantor dua lantai yang sudah ada menjadi tempat mengamati aset dalam situasi nyata. Sistem bisnis, perekrutan, atau gameplay baru berada di luar cakupan fase ini.
+
+## Menjalankan di komputer
+
+Gunakan Node.js 24 atau Node.js 22.18+ dan pnpm. Buka terminal di folder proyek:
 
 ```sh
 pnpm install
 pnpm dev
 ```
 
-Buka [http://127.0.0.1:5173](http://127.0.0.1:5173) atau alamat Local yang muncul di terminal. Biarkan terminal berjalan selama bermain. Refresh halaman untuk memuat pembaruan. Internet diperlukan untuk mengunduh dependensi pertama kali.
-
-Aplikasi memerlukan Node.js 20.19+ dan pnpm. Pengujian TypeScript bawaan memerlukan Node.js 22.18+ atau 24.
+Buka alamat **Local** yang ditampilkan terminal, biasanya [http://localhost:5173](http://localhost:5173). Biarkan terminal berjalan selama membuka kantor. Pengunduhan dependensi pertama kali memerlukan internet.
 
 ```sh
 pnpm test
@@ -25,124 +27,54 @@ pnpm build
 pnpm preview
 ```
 
-Save terikat pada browser dan alamat/port. Alamat localhost dan 127.0.0.1 memakai penyimpanan berbeda; gunakan alamat yang sama untuk melanjutkan permainan.
+`pnpm test` menjalankan pemeriksaan simulasi/navigasi yang tersedia. `pnpm build` memeriksa TypeScript dan membuat folder `dist`; `pnpm preview` membuka hasil build lokal.
 
-## Tata kantor
+## Mencoba fondasi visual
 
-Pintu kaca utama mengarah ke Reception dan meja Amanda. Koridor dan tangga menghubungkan kedua lantai. Karakter berjalan mengikuti jalur serta elevasi tangga secara bertahap. Open Workspace memiliki luas dua kali ruangan standar dan empat meja komputer.
+1. Buka **Studio visual** untuk melihat karakter dari dekat, mengganti pose/ekspresi, dan membandingkan delapan siluet. Preview memakai rig serta materi yang sama dengan kantor.
+2. Pilih kamera **Miniature**, **Third person**, atau **Face detail**. Orbit dan zoom memperlihatkan aset dari berbagai sudut.
+3. Coba **Bekerja** untuk memeriksa pose duduk di kursi dan orientasi ke komputer; bandingkan **Berjalan**, **Berdiskusi**, **Membaca**, dan **Menyapa**.
+4. Pilih **Balanced** atau **High** pada kontrol grafis. Studio menampilkan FPS, draw calls, dan segitiga dari sesi renderer yang sedang dibuka.
+5. Sembunyikan panel untuk menilai komposisi kantor. Kamera dan pilihan lantai tetap tersedia.
+
+Waktu kantor berhenti selama Studio visual dibuka. Pilihan pose/ekspresi studio hanya mengubah preview.
+
+## Menjelajahi kantor
+
+- **Director:** drag untuk orbit, scroll untuk zoom, drag kanan untuk pan. Pilih ruangan melalui peta atau lantai.
+- **Avatar:** WASD, tombol panah, atau tombol arah di layar; kamera mengikuti avatar. Tangga menghubungkan dua lantai. Dekati staf lalu gunakan E atau tombol Sapa.
+- **Lantai:** Lantai 1 / Lantai 2 / Semua mengatur bagian bangunan yang terlihat. Pemilihan ruangan/staf menampilkan lantai yang sesuai.
+- **Layar kecil:** Map dan Team membuka panel saat dibutuhkan.
+- **Waktu:** pause / 1x / 2x / 3x. Pada 1x, satu detik nyata sama dengan satu menit game; satu hari berlangsung 24 menit nyata.
+- **Kurangi animasi:** tersedia pada panel cerita kantor. Gerak ringan/dekoratif dikurangi sementara pose dan navigasi tetap terbaca.
 
 | Lantai 1 | Lantai 2 |
 | --- | --- |
-| Reception | Meeting Room |
-| Open Workspace | Founder Office |
-| HRD | Manager Office |
-| Pantry | |
-| Database Server | |
-| Library | |
-| WC 1 | |
-| WC 2 | |
+| Reception, Open Workspace, Pantry, Database Server, HRD, Library, WC 1, WC 2 | Meeting Room, Founder Office, Manager Office |
 
-Meeting Room dan Pantry memiliki tujuh kursi untuk enam pekerja serta Akbar. Library menyediakan tempat membaca; Pantry memiliki perlengkapan minum/memasak. Kedua WC memiliki penanda terisi dan menyembunyikan karakter yang sedang menggunakannya.
+ATLAS berada di Manager Office; NOVA, LYRA, ORION, dan SAGE berbagi Open Workspace; NEXUS di Database Server; Amanda menyambut orang di Reception; Akbar berada di Founder Office. Delapan staf menggunakan satu keluarga proporsi, bahan, dan rig.
 
-## Tim
+Jadwal tersedia berulang Senin–Minggu: pukul 07:00 lampu menyala dan staf datang bertahap melalui resepsionis; kerja 08:00–12:00 dan 13:00–17:00; makan siang 12:00–13:00. Setelah absen pulang, staf keluar dan kantor meredup. Rapat, percakapan, membaca, minum, dan kegiatan scripted lain menjadi konteks untuk melihat animasi.
 
-| Karakter | Peran | Tempat utama |
-| --- | --- | --- |
-| ATLAS | Office manager; mengatur operasional dan memeriksa tim | Manager Office, lantai 2 |
-| NOVA | Creative director; mendesain karya | Open Workspace, lantai 1 |
-| LYRA | People & culture; agenda tim dan dokumen HRD | Open Workspace, lantai 1 |
-| ORION | Research analyst; menganalisis riset | Open Workspace, lantai 1 |
-| SAGE | Community host; menyiapkan program komunitas | Open Workspace, lantai 1 |
-| NEXUS | Systems engineer; memantau sistem dan memperbaiki komputer | Database Server, lantai 1 |
-| Amanda | Receptionist; mencatat absensi dan menyambut tamu | Reception, lantai 1 |
-| Akbar | Founder; memimpin dan merencanakan kantor | Founder Office, lantai 2 |
+## Save dan hosting
 
-Akbar memiliki desain karakter dengan jaket navy, kacamata keemasan, dan gaya rambut tersendiri. Amanda berdiri di belakang meja resepsionis selama bertugas; staf lainnya dapat duduk bekerja, rapat, membaca, atau berinteraksi.
+**Save** dan autosave menyimpan permainan dalam browser. Data terikat pada browser, perangkat, dan alamat situs. `localhost`, `127.0.0.1`, alamat hosting, serta port berbeda mempunyai penyimpanan berbeda. Save belum tersinkron antarperangkat. Gunakan alamat yang sama untuk melanjutkan permainan.
 
-## Rutinitas harian
+Hosting menyajikan folder build `dist`; checkout hosting memetakan proyek melalui `.openai/hosting.json`. Save versi sebelumnya dibaca melalui jalur migrasi yang tersedia. Menutup tab menghentikan simulasi; progres offline belum tersedia. Penyimpanan yang ditolak/penuh ditampilkan sebagai kegagalan Save.
 
-Permainan baru dimulai pada **Senin, 07:00**. Nama hari berulang dari Senin sampai Minggu; seluruh tim sementara bekerja setiap hari, termasuk akhir pekan.
+## Sumber bersama
 
-| Waktu game | Rutinitas |
+| Bagian | Sumber |
 | --- | --- |
-| 07:00 | Lampu menyala; Amanda masuk dan menyiapkan absensi |
-| 07:03 | Akbar tiba melalui pintu utama |
-| 07:06–07:21 | Enam pekerja lainnya datang bergantian dengan selang tiga menit |
-| Sebelum ke meja | Setiap pekerja mengantre dan absen masuk satu per satu di depan Amanda |
-| 08:00–12:00 | Bekerja di depan komputer, diselingi rapat, kegiatan departemen, dan rutinitas ringan |
-| 12:00–13:00 | Istirahat makan/minum di Pantry dan interaksi sederhana; Amanda tetap menjaga resepsionis |
-| 13:00–17:00 | Kembali bekerja dan menjalankan kegiatan kantor |
-| Mulai 17:00 | Tim menuju Amanda untuk absen pulang, kemudian keluar melalui pintu utama |
-| Setelah absensi selesai | Amanda menutup resepsionis dan pulang; lampu padam setelah kantor kosong |
-| 07:00 hari berikutnya | Lampu dan kedatangan berulang |
+| Nama, palet, bahan, ukuran, kualitas grafis | `src/artDirection.ts` |
+| Siluet, pakaian, kulit, rambut, kepribadian | `src/characterProfiles.ts` |
+| Rig hierarkis, wajah, aksesori, pose prosedural | `src/CharacterRig.tsx` |
+| Preview aset dan pengukuran renderer | `src/VisualStudio.tsx` |
+| Ruangan, staf, furnitur, titik aktivitas | `src/worldData.ts`, `src/officeLayout.ts`, `src/OfficeArchitecture.tsx`, `src/BuildingShell.tsx` |
+| Cahaya dan gerak lingkungan | `src/RoomLife.tsx` |
+| Kamera, kontrol, dan UI | `src/App.tsx`, `src/styles.css` |
+| Jadwal, navigasi, interaksi, save | `src/simulation.ts`, `src/navigation.ts`, `src/social.ts` |
 
-Layanan absensi berlangsung sekitar dua menit game setelah pekerja tiba di meja layanan. Log Amanda menampilkan absensi masuk/pulang serta kunjungan client. Tamu datang ke resepsionis, mengisi buku tamu, menunggu sebentar, lalu keluar kembali. Layanan tamu belum berkembang menjadi wawancara HRD atau proyek bisnis.
+Lihat [ART_DIRECTION.md](ART_DIRECTION.md), [ANIMATION_PLAN.md](ANIMATION_PLAN.md), serta [QA.md](QA.md) untuk aturan visual, kontrak gerakan, dan pemeriksaan.
 
-Satu rapat tim dijadwalkan setiap hari. Jam mulai bervariasi antara **09:00–09:30** atau **13:30–14:00**, dengan durasi diskusi **30, 45, atau 60 menit game**. Agenda ditentukan oleh hari sehingga tetap sama saat save/reload. Tujuh peserta berjalan ke kursi Meeting Room di lantai 2; penghitung diskusi dimulai setelah semuanya duduk. Mereka bergantian berbicara dan mendengarkan, lalu kembali ke meja.
-
-Pekerjaan memberi 10 HQ Credits virtual per 60 menit benar-benar bekerja. Perjalanan, rapat, tugas tambahan, percakapan, dan menunggu perbaikan komputer tidak dihitung sebagai kerja. Credits belum dapat dibelanjakan.
-
-## Kegiatan kantor otomatis
-
-- **Diskusi Founder–Manager:** ATLAS menemui Akbar di Founder Office. Diskusi proyek berlangsung 15 menit game setelah keduanya tiba di kursi.
-- **Pemeriksaan tim:** ATLAS berkeliling menuju meja anggota tim dan memeriksa pekerjaan selama sekitar enam menit setelah tiba.
-- **Perbaikan komputer:** masalah acak dapat muncul pada komputer tim, termasuk milik Akbar. Pemilik berhenti bekerja sementara; NEXUS berjalan ke meja yang bermasalah, termasuk naik tangga, dan memperbaikinya selama sekitar 12 menit setelah tiba.
-- **Rutinitas pribadi:** karakter dapat membaca di Library, menggunakan salah satu WC, mengambil minum, atau memasak di Pantry. LYRA juga dapat mengurus dokumen HRD.
-- **Jadwal utama:** mulai rapat, akhir makan siang, dan tutup kantor mengarahkan staf ke kegiatan berikutnya. Kegiatan tambahan yang belum selesai dapat dijadwalkan ulang.
-
-## Cara bermain
-
-- **Lantai:** tombol **Lantai 1**, **Lantai 2**, dan **Semua** mengatur tampilan. Memilih ruangan atau staf berpindah ke lantai yang sesuai.
-- **Director:** drag untuk orbit, scroll untuk zoom, drag kanan untuk pan. Pilih ruangan melalui Office map atau klik lantai.
-- **Layar kecil:** tombol **Map** dan **Team** membuka panel agar kantor tetap terlihat.
-- **NPC:** klik karakter atau nama staf. Tab **Kondisi** menampilkan kebutuhan, progres kerja, kegiatan, serta waktu absen masuk/pulang.
-- **Agenda dan operasi:** buka **Agenda hari ini** / Office Stories untuk melihat rapat, kegiatan aktif, kondisi komputer, tamu, serta catatan Amanda. Tombol **Lihat** membawa kamera ke kegiatan terkait.
-- **Interaksi:** pilih rekan dan kegiatan pada tab **Interaksi & hubungan**, lalu tekan **Mulai interaksi**. Akbar dapat ikut; Amanda tetap bertugas di resepsionis.
-- **Arahan:** **Arahkan bekerja** dan **Istirahat di Pantry** tersedia saat karakter berada di kantor, pada jam kerja, dan sedang tidak menjalankan rapat atau tugas khusus. Arahan berlaku hingga 60 menit game, dibatasi jadwal makan siang/tutup.
-- **Avatar:** pilih Avatar / Enter Avatar. WASD, tombol panah, atau tombol gerak di layar untuk berjalan mengikuti arah layar. Gunakan tangga untuk pindah lantai; dinding dan furnitur menghalangi gerakan.
-- **Menyapa:** dekati staf dan tekan E atau tombol Sapa. Dialog scripted serta gestur sapaan muncul. Jeda sepuluh detik nyata antar-sapaan.
-- **Waktu:** pause / 1x / 2x / 3x. Pada 1x, satu detik nyata = satu menit game; satu hari = 24 menit nyata. Pause membekukan simulasi dan NPC; Avatar, kamera, dan pintu yang merespons Avatar tetap dapat bergerak.
-- **Save:** tombol Save dan autosave setiap 15 detik menyimpan permainan lokal. Pilihan **Kurangi animasi** dan tampilan lantai juga tersimpan.
-
-## Interaksi dan animasi
-
-Maksimal tiga pasangan memakai kursi yang berbeda. Mereka menunggu rekan tiba, saling menghadap, dan berbicara bergantian. Bonus diberikan setelah selesai; pembatalan tidak memberi bonus.
-
-| Kegiatan | Tempat | Durasi setelah tiba | Manfaat per peserta |
-| --- | --- | --- | --- |
-| Ngobrol santai | Pantry | 14 menit game | Sosial +18, fokus +5, kedekatan +8 |
-| Brainstorm | Meeting Room | 20 menit game | Fokus +12, sosial +12, kedekatan +8 |
-| Beri semangat | Pantry | 12 menit game | Energi +8, sosial +12, fokus +5, kedekatan +10 |
-
-Kedekatan 0–39: Mulai kenal; 40–69: Akrab; 70–100: Kompak. Kebutuhan dan hubungan dibatasi 0–100.
-
-Rig 3D memiliki bahu, siku, pinggul, lutut, wajah, rambut, tangan, dan sepatu. Pose mencakup berjalan, menaiki tangga, duduk mengetik, berdiskusi, membaca buku, memeriksa perangkat, memperbaiki dengan alat, memasak, menulis absensi, makan/minum, dan sapaan. Langkah lebih pelan; elevasi tangga berubah terus mengikuti jalur. Gerak sendi/dekorasi mengikuti kecepatan hingga 2x, sedangkan navigasi dan jam tetap mengikuti pilihan 1x/2x/3x.
-
-Pemetaan animasi dan acuan furnitur: [ANIMATION_PLAN.md](ANIMATION_PLAN.md).
-
-## Penyimpanan dan batas prototype
-
-- Kunci save: `vanderleinz-hq-milestone-5`. Save versi 1–4 dibaca dan dimigrasikan ketika belum ada save versi 5.
-- Migrasi mempertahankan waktu/hari, Credits, kebutuhan, progres kerja, dan data hubungan yang valid; karakter ditempatkan aman pada tata baru. Akbar serta kegiatan kantor baru ditambahkan.
-- Save versi 5 menyimpan posisi/elevasi, kehadiran, absensi, tamu, kondisi komputer, tugas yang berlangsung, agenda, hubungan/interaksi, urutan kejadian acak, Avatar, kecepatan, dan pilihan lantai/animasi. Jalur dihitung ulang dengan aman saat dimuat, termasuk saat berada di tangga.
-- Data rusak dipulihkan dengan nilai aman. Penyimpanan browser yang ditolak/penuh ditampilkan sebagai kegagalan Save.
-- Tab tersembunyi menghentikan simulasi; belum ada progres offline. Jeda sistem dibatasi menjadi pembaruan maksimal 0,5 detik nyata.
-- Visual merupakan 3D miniatur bergaya dengan geometri dan animasi prosedural; belum menggunakan model fotorealistis, karakter impor, atau motion capture.
-- Kursi memakai titik duduk tetap. Avatar belum dapat duduk, membaca, memasak, atau memakai komputer; kontak tangan dengan furnitur belum memakai inverse kinematics.
-- NPC belum saling menghindari. Dinding/furnitur membatasi navigasi; daun pintu adalah visual yang membuka otomatis.
-- Kehidupan kantor memakai dialog dan tugas scripted. Belum ada sistem wawancara lengkap, perekrutan, furnitur yang dapat dibeli, gaji, upgrade, atau proyek bisnis.
-
-## Struktur
-
-- `src/worldData.ts`: dua lantai, sebelas ruangan, delapan staf, dan tugas.
-- `src/officeLayout.ts`: furnitur, kursi, absensi, pintu masuk, tangga, serta titik kegiatan.
-- `src/navigation.ts`: jalur dengan elevasi, perpindahan lantai, dan tabrakan Avatar.
-- `src/simulation.ts`: waktu/hari, kehadiran, absensi/tamu, tugas, perbaikan, rapat, dan save.
-- `src/social.ts`: pasangan, kursi, dialog, hubungan, dan bonus.
-- `src/CharacterRig.tsx`: rig serta transisi pose aktivitas.
-- `src/BuildingShell.tsx`, `src/OfficeArchitecture.tsx`: bangunan, tangga, furnitur, pintu masuk, dan lingkungan.
-- `src/RoomLife.tsx`: pencahayaan serta animasi pintu, perangkat, dan dekorasi.
-- `src/App.tsx`: kamera, input, panel lantai/tim, dan kontrol permainan.
-- `tests/`: 39 pengujian simulasi, sosial, rutinitas, tugas, navigasi, dan save.
-
-Catatan validasi: [QA.md](QA.md).
+Karakter memakai geometri lokal dengan sendi hierarkis prosedural, belum model GLB dengan skeletal clips. Kontak tangan/kaki belum memakai inverse kinematics. NPC belum menghindari kerumunan secara fisik; avatar belum menggunakan furnitur. FPS studio menggambarkan sesi/perangkat saat itu, bukan jaminan semua perangkat.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
@@ -20,6 +20,10 @@ import { OfficeFurnishings, OfficeEntrance, OfficeLandscape } from './OfficeArch
 import { arrivalMinute, workSeat, desks, RECEPTION_POST, roomLocal } from './officeLayout';
 import { BuildingShell } from './BuildingShell';
 import type { FloorView } from './BuildingShell';
+import { BRAND, GRAPHICS, PALETTE } from './artDirection';
+import type { GraphicsQuality } from './artDirection';
+
+const VisualStudio = lazy(() => import('./VisualStudio'));
 
 function formatTime(minutes: number) {
   const hour = Math.floor(minutes / 60) % 24;
@@ -59,6 +63,12 @@ function App() {
   const [partner, setPartner] = useState(1);
   const [interactionKind, setInteractionKind] = useState<InteractionKind>('chat');
   const [showMoments, setShowMoments] = useState(false);
+  const [showStudio, setShowStudio] = useState(false);
+  const [hideInterface, setHideInterface] = useState(false);
+  const [quality, setQuality] = useState<GraphicsQuality>(() => {
+    try { return localStorage.getItem('blue-and-space-graphics') === 'high' ? 'high' : 'balanced'; }
+    catch { return 'balanced'; }
+  });
   const [reducedMotion, setReducedMotion] = useState(() => initial.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const avatarGesture = useRef(0);
   const [savedAt, setSavedAt] = useState(initial.savedAt);
@@ -88,10 +98,12 @@ function App() {
       const now = performance.now();
       const elapsed = Math.min((now - previous) / 1000, 0.5);
       previous = now;
-      if (!document.hidden) setSimulation((current) => stepSimulation(current, elapsed, speed));
+      if (!document.hidden && !showStudio) setSimulation((current) => stepSimulation(current, elapsed, speed));
     }, 200);
     return () => window.clearInterval(timer);
-  }, [speed]);
+  }, [speed, showStudio]);
+
+  useEffect(() => { try { localStorage.setItem('blue-and-space-graphics', quality); } catch { /* Graphics remain usable without storage. */ } }, [quality]);
 
   useEffect(() => {
     if (!toast) return;
@@ -121,7 +133,7 @@ function App() {
   const focusRoom = (id: number) => { setSelectedRoom(id); setFloorView(rooms[id].floor); setMobilePanel(null); setMode('director'); };
   const chooseFloor = (next: FloorView) => { setFloorView(next); setMode('director'); if (next !== 'all' && room.floor !== next) setSelectedRoom(next === 0 ? 1 : 2); };
   const changeMode = (next: 'director' | 'avatar') => {
-    setMode(next);
+    setMode(next); setMobilePanel(null);
     const currentFloor = floorOf(avatarPosition.current);
     if (next === 'avatar') setFloorView(currentFloor);
     else if (mode === 'avatar') { setSelectedRoom(roomAt(avatarPosition.current) ?? (currentFloor === 0 ? 1 : 2)); setFloorView((current) => current === 'all' ? current : currentFloor); }
@@ -136,7 +148,7 @@ function App() {
   };
   useEffect(() => {
     const interact = (event: KeyboardEvent) => {
-      if (mode === 'avatar' && event.code === 'KeyE' && !event.repeat && !(event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName))) greetNearby();
+      if (!showStudio && mode === 'avatar' && event.code === 'KeyE' && !event.repeat && !(event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName))) greetNearby();
     };
     window.addEventListener('keydown', interact);
     return () => window.removeEventListener('keydown', interact);
@@ -144,20 +156,20 @@ function App() {
 
 
   return (
-    <main className="game-shell">
-      <section className="world-view" aria-label="Playable 3D office world">
-        <Canvas shadows dpr={[1, 1.7]} camera={{ position: [19, 22, 26], fov: 34 }} gl={{ antialias: true, alpha: false }}>
-          <color attach="background" args={[daylight(gameMinute) > 0.2 ? '#d4e5f0' : '#91abc5']} />
-          <fog attach="fog" args={['#cfdfeb', 34, 65]} />
-          <OfficeLighting minute={gameMinute} simulation={simulation} />
-          <OfficeWorld selectedRoom={selectedRoom} floorView={floorView} mode={mode} simulation={simulation} speed={speed} reducedMotion={reducedMotion} avatarGesture={avatarGesture} avatarPosition={avatarPosition} touchKeys={touchKeys} onAvatarRoomChange={(id) => { setAvatarRoom(id); if (id !== null) setSelectedRoom(id); }} onAvatarFloorChange={(floor) => setFloorView((current) => current === 'all' ? current : floor)} onSelectRoom={focusRoom} onSelectNpc={inspectNpc} />
+    <main className={`game-shell ${mode === 'avatar' ? 'avatar-mode' : ''} ${hideInterface ? 'ui-hidden' : ''}`}>
+      <section className="world-view" aria-label={`${BRAND.name} · 3D office world`}>
+        <Canvas shadows="soft" frameloop={showStudio ? 'never' : 'always'} dpr={[1, GRAPHICS[quality].dpr]} camera={{ position: [19, 22, 26], fov: 34 }} gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1 }}>
+          <color attach="background" args={[daylight(gameMinute) > 0.2 ? '#DFEAF4' : '#91A9C4']} />
+          <fog attach="fog" args={[daylight(gameMinute) > 0.2 ? '#DFEAF4' : '#91A9C4', 48, 90]} />
+          <OfficeLighting minute={gameMinute} simulation={simulation} quality={quality} />
+          <OfficeWorld selectedRoom={selectedRoom} floorView={floorView} mode={showStudio ? 'director' : mode} simulation={simulation} speed={speed} reducedMotion={reducedMotion} avatarGesture={avatarGesture} avatarPosition={avatarPosition} touchKeys={touchKeys} onAvatarRoomChange={(id) => { setAvatarRoom(id); if (id !== null) setSelectedRoom(id); }} onAvatarFloorChange={(floor) => setFloorView((current) => current === 'all' ? current : floor)} onSelectRoom={focusRoom} onSelectNpc={inspectNpc} />
           <CameraRig room={room} floorView={floorView} mode={mode} />
         </Canvas>
         <div className="world-vignette" />
         <header className="topbar">
           <div className="brand-lockup">
-            <div className="brand-mark">V<span>✦</span></div>
-            <div><div className="brand-name">VANDERLEINZ <span>AI HQ</span></div><div className="brand-caption">OFFICE TYCOON SIMULATOR</div></div>
+            <div className="brand-mark" aria-hidden="true">B<span>✦</span></div>
+            <div><div className="brand-name">BLUE <span>AND</span> SPACE</div><div className="brand-caption">HEADQUARTERS · YOUR LITTLE WORLD</div></div>
           </div>
           <div className="topbar-center"><span className={`live-dot ${officeOpen(gameMinute) ? '' : 'closed'}`} /> {speed === 0 ? 'PAUSED' : officeOpen(gameMinute) ? 'KANTOR BUKA' : 'KANTOR TUTUP'} <i>·</i> {peopleInside} / 8 DI HQ</div>
           <div className="topbar-actions">
@@ -168,6 +180,11 @@ function App() {
 
         <nav className="compact-tools" aria-label="Office controls"><button aria-expanded={mobilePanel === 'map'} onClick={() => setMobilePanel(mobilePanel === 'map' ? null : 'map')}>⌖ Map · 11 ruang</button><button aria-expanded={mobilePanel === 'team'} onClick={() => setMobilePanel(mobilePanel === 'team' ? null : 'team')}>♙ Team · 8</button><button onClick={() => changeMode(mode === 'director' ? 'avatar' : 'director')}>{mode === 'director' ? 'Enter Avatar' : 'Director'}</button></nav>
         <FloorControls value={floorView} onChange={chooseFloor} />
+        <nav className="visual-tools" aria-label="Visual tools">
+          <button onClick={() => { touchKeys.current.clear(); setShowStudio(true); }} aria-haspopup="dialog">✦ Studio visual</button>
+          <label className="quality-control">Grafis <select aria-label="Graphics quality" value={quality} onChange={(event) => setQuality(event.target.value as GraphicsQuality)}><option value="balanced">Balanced</option><option value="high">High</option></select></label>
+          <button aria-pressed={hideInterface} onClick={() => setHideInterface(!hideInterface)}>{hideInterface ? 'Tampilkan panel' : 'Lihat dunia'}</button>
+        </nav>
         <aside className={`left-panel ${mobilePanel === 'map' ? 'panel-open' : ''}`}>
           <div className="eyebrow">YOUR HEADQUARTERS</div>
           <div className="panel-heading-row"><h1>Office map</h1><span className="room-count">11 ROOMS</span></div>
@@ -236,7 +253,7 @@ function App() {
             {STAFF_WORKERS.filter((i) => i !== selectedNpc).map((i) => <div key={staff[i].name} className="bond-row"><span>{staff[i].name}<small>{bondLabel(simulation.bonds[bondKey(selectedNpc, i)] ?? 25)}</small></span><meter min={0} max={100} value={simulation.bonds[bondKey(selectedNpc, i)] ?? 25} aria-label={'Relationship with ' + staff[i].name} /><strong>{Math.round(simulation.bonds[bondKey(selectedNpc, i)] ?? 25)}</strong></div>)}
           </div>}
         </section>}
-        <div className="activity-feed" aria-label="HQ activity"><span className="eyebrow">HQ MOMENTS</span><p>{simulation.events[0]}</p><button aria-expanded={showMoments} onClick={() => { setSelectedNpc(null); setShowMoments(!showMoments); }}>{simulation.encounters.length} interaksi aktif · Lihat cerita ↗</button></div>
+        <div className="activity-feed" aria-label="HQ activity"><span className="eyebrow">HQ MOMENTS</span><p title={simulation.events[0]}>{simulation.events[0]}</p><button aria-label={`Office stories · ${simulation.encounters.length} active interactions`} aria-expanded={showMoments} onClick={() => { setSelectedNpc(null); setShowMoments(!showMoments); }}>Cerita ↗</button></div>
         {showMoments && <section className="moments-panel" aria-label="Office stories"><header><div><span className="eyebrow">OFFICE STORIES</span><h2>Hari-hari kecil di HQ</h2></div><button aria-label="Close office stories" onClick={() => setShowMoments(false)}>×</button></header><OfficeAgenda simulation={simulation} onViewMeeting={() => { focusRoom(2); setShowMoments(false); }} /><OfficeOperations simulation={simulation} onFocus={focusRoom} /><p>{simulation.completedInteractions} kegiatan bersama selesai · {completedRoutines} rutinitas selesai</p><label className="motion-control"><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /> Kurangi animasi</label>{simulation.encounters.length === 0 && <p className="story-empty">Pilih staf → Interaksi untuk mengajak rekan ngobrol atau brainstorm. Saat berkumpul, tim juga mengobrol secara otomatis.</p>}{simulation.encounters.map((e) => <article key={e.id} className="encounter-card"><strong>{e.participants.map((i) => staff[i].name).join(' ↔ ')}</strong><p>{interactionLabels[e.kind]} · {rooms[e.roomId].name}</p><small>{e.phase === 'approach' ? 'Sedang menuju tempat pertemuan' : staff[dialogueFor(e).speaker].name + ': ' + dialogueFor(e).text}</small><progress max={interactionDuration[e.kind]} value={e.elapsed} aria-label="Conversation progress" /><button onClick={() => { focusRoom(e.roomId); setShowMoments(false); }}>Lihat di ruangan</button></article>)}<div className="relationship-heading">CATATAN HARI INI</div>{simulation.events.slice(0, 5).map((event, i) => <p className="story-event" key={i}>{event}</p>)}</section>}
         {mode === 'avatar' && <div className="avatar-actions"><button disabled={nearby < 0 || speed === 0 || Date.now() < greetReadyAt} onClick={greetNearby}>{nearby < 0 ? 'Dekati staf untuk menyapa' : Date.now() < greetReadyAt ? 'Sudah disapa · tunggu sebentar' : 'E · Sapa ' + npcs[nearby].name}</button><div className="walk-pad" aria-label="Avatar movement">{[['w','↑'],['a','←'],['s','↓'],['d','→']].map(([key,label]) => <button key={key} aria-label={'Walk ' + key.toUpperCase()} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); touchKeys.current.add(key); }} onPointerUp={() => touchKeys.current.delete(key)} onPointerCancel={() => touchKeys.current.delete(key)} onLostPointerCapture={() => touchKeys.current.delete(key)}>{label}</button>)}</div></div>}
         <div className="selected-room-tag"><span className="tag-pin">⌖</span><div><small>NOW EXPLORING</small><strong>{mode === 'avatar' ? avatarRoom === null ? onStairs(avatarPosition.current) ? 'Tangga antar lantai' : 'Koridor HQ' : rooms[avatarRoom].name : room.name}</strong></div><span className="tag-sparkle">✦</span></div>
@@ -252,6 +269,7 @@ function App() {
         <div className="world-legend"><span className="legend-dot" /> COZY MINIATURE WORLD <i>·</i> BLUE / CREAM / WOOD</div>
         {toast && <div role="status" className="toast-message"><span>✓</span>{toast}</div>}
         {(savedAt || saveError) && <div role="status" className="saved-indicator">{saveError ? '⚠ Local save unavailable' : '● Autosave on · local browser'}</div>}
+        {showStudio && <Suspense fallback={<div className="studio-loading" role="status">Menyiapkan studio visual…</div>}><VisualStudio quality={quality} reducedMotion={reducedMotion} onClose={() => setShowStudio(false)} /></Suspense>}
       </section>
     </main>
   );
@@ -339,8 +357,8 @@ function StaffActor({ person, npc, index, visible, simulation, speed, reducedMot
   });
   return <group ref={actor} position={origin.current} rotation={initialFacing.current} visible={visible && npc.presence !== 'offsite' && !inPrivateWC} onClick={(event) => { event.stopPropagation(); if (event.delta < 5) onSelect(); }}>
     <CharacterRig color={person.color} hair={person.hair} pose={pose} seated={!!seat} speed={speed} reducedMotion={reducedMotion} variant={index} />
-    <group position={[0, seat ? 1.58 : 1.84, 0]}><SceneLabel text={person.name} kind="npc" /></group>
-    {dialogue?.speaker === index && <SpeechBubble name={person.name} text={dialogue.text} color={person.color} />}
+    {(!avatarActive || pointDistance(npc.position, avatarPosition.current) < 5) && <group position={[0, seat ? 1.58 : 1.84, 0]} scale={avatarActive ? .55 : 1}><SceneLabel text={person.name} kind="npc" /></group>}
+    {dialogue?.speaker === index && (!avatarActive || pointDistance(npc.position, avatarPosition.current) < 3.2) && <SpeechBubble name={person.name} text={dialogue.text} color={person.color} compact={avatarActive} />}
   </group>;
 }
 
@@ -369,7 +387,29 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
   const currentFloor = useRef(floorOf(position.current));
   const pose = useRef<Pose>('idle');
   const keys = useRef(new Set<string>());
-  const { camera } = useThree();
+  const { camera, scene } = useThree();
+  const cameraBlockers = useRef<THREE.Object3D[]>([]);
+  const cameraRay = useMemo(() => new THREE.Raycaster(), []);
+  const movement = useMemo(() => new THREE.Vector3(), []);
+  const forward = useMemo(() => new THREE.Vector3(), []);
+  const right = useMemo(() => new THREE.Vector3(), []);
+  const cameraSide = useRef(1);
+  const cameraTarget = useMemo(() => new THREE.Vector3(), []);
+  const cameraGoal = useMemo(() => new THREE.Vector3(), []);
+  const boom = useMemo(() => new THREE.Vector3(), []);
+  useEffect(() => {
+    const blockers: THREE.Object3D[] = [];
+    scene.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      if (materials.some((material) => material.transparent || !material.depthWrite)) return;
+      let ancestor: THREE.Object3D | null = object;
+      let marked = false, visible = true;
+      while (ancestor) { marked ||= ancestor.userData.cameraObstacle === true; visible &&= ancestor.visible; ancestor = ancestor.parent; }
+      if (marked && visible) blockers.push(object);
+    });
+    cameraBlockers.current = blockers;
+  }, [scene, floorView, active]);
   useEffect(() => {
     keys.current.clear(); touchKeys.current.clear();
     const down = (event: KeyboardEvent) => {
@@ -390,28 +430,56 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
     if (!avatar.current || !active) return;
     const has = (key: string) => keys.current.has(key) || touchKeys.current.has(key);
     const horizontal = Number(has('d')) - Number(has('a')), vertical = Number(has('s')) - Number(has('w'));
-    // Camera-relative movement: W always walks toward the top of the screen.
-    const direction = new THREE.Vector3(horizontal * 0.832 + vertical * 0.555, 0, -horizontal * 0.555 + vertical * 0.832);
-    if (direction.lengthSq()) {
-      direction.normalize().multiplyScalar(Math.min(delta, 0.05) * 2.1);
-      position.current = moveAvatar(position.current, direction.x, direction.z);
-      avatar.current.rotation.y = Math.atan2(direction.x, direction.z);
+    // Movement follows the camera even when an obstacle changes its shoulder view.
+    camera.getWorldDirection(forward); forward.y = 0; forward.normalize();
+    right.set(-forward.z, 0, forward.x);
+    movement.copy(right).multiplyScalar(horizontal).addScaledVector(forward, -vertical);
+    let walking = false;
+    if (movement.lengthSq()) {
+      movement.normalize().multiplyScalar(Math.min(delta, 0.05) * 1.45);
+      const previous = position.current;
+      position.current = moveAvatar(previous, movement.x, movement.z);
+      walking = pointDistance(previous, position.current) > 0.0001;
+      const targetAngle = Math.atan2(movement.x, movement.z);
+      const angle = targetAngle - avatar.current.rotation.y;
+      avatar.current.rotation.y += Math.atan2(Math.sin(angle), Math.cos(angle)) * (1 - Math.exp(-11 * delta));
     }
     gesture.current = Math.max(0, gesture.current - delta);
-    pose.current = direction.lengthSq() ? onStairs(position.current) ? 'stairs' : 'walk' : gesture.current > 0 ? 'wave' : 'idle';
+    pose.current = walking ? onStairs(position.current) ? 'stairs' : 'walk' : gesture.current > 0 ? 'wave' : 'idle';
     const y = elevation(position.current);
     avatar.current.position.set(position.current[0], y, position.current[1]);
     avatar.current.visible = active && (floorView === 'all' || floorOf(position.current) === floorView || onStairs(position.current));
     const nextRoom = roomAt(position.current);
     if (nextRoom !== currentRoom.current) { currentRoom.current = nextRoom; onRoomChange(nextRoom); }
     const nextFloor = floorOf(position.current); if (nextFloor !== currentFloor.current) { currentFloor.current = nextFloor; onFloorChange(nextFloor); }
-    camera.position.lerp(new THREE.Vector3(position.current[0] + 7, y + 10, position.current[1] + 10.5), 1 - Math.exp(-4 * delta));
-    camera.lookAt(position.current[0], y + .55, position.current[1]);
+    cameraTarget.set(position.current[0], y + .95, position.current[1]);
+    // Lift over dollhouse walls before shortening the boom into the character.
+    let foundView = false;
+    for (const side of [cameraSide.current, -cameraSide.current]) {
+      for (const height of [3, 4.1, 5.2, 6.3]) {
+        cameraGoal.set(position.current[0] + 2.8 * side, y + height, position.current[1] + 4.4 * side);
+        boom.copy(cameraGoal).sub(cameraTarget); cameraRay.far = boom.length(); boom.normalize(); cameraRay.set(cameraTarget, boom);
+        const hit = cameraRay.intersectObjects(cameraBlockers.current, false)[0];
+        if (!hit || hit.distance > 3.2) {
+          if (hit) cameraGoal.copy(cameraTarget).addScaledVector(boom, hit.distance - .3);
+          cameraSide.current = side; foundView = true; break;
+        }
+      }
+      if (foundView) break;
+    }
+    if (!foundView) cameraGoal.set(position.current[0] + .7, y + 5.2, position.current[1] + 1.1);
+    camera.position.lerp(cameraGoal, 1 - Math.exp(-5 * delta));
+    boom.copy(camera.position).sub(cameraTarget); cameraRay.far = boom.length(); boom.normalize(); cameraRay.set(cameraTarget, boom);
+    const currentObstruction = cameraRay.intersectObjects(cameraBlockers.current, false)[0];
+    if (currentObstruction) camera.position.copy(cameraGoal);
+    camera.lookAt(cameraTarget);
+    const perspective = camera as THREE.PerspectiveCamera;
+    if (Math.abs(perspective.fov - 46) > .01) { perspective.fov = THREE.MathUtils.damp(perspective.fov, 46, 6, delta); perspective.near = .08; perspective.updateProjectionMatrix(); }
   });
   return <group ref={avatar} position={[position.current[0], elevation(position.current), position.current[1]]} visible={active}>
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.15, 0]}><ringGeometry args={[0.32, 0.4, 32]} /><meshBasicMaterial color="#628ea0" /></mesh>
-    <CharacterRig color="#4d7892" hair="#394c5b" pose={pose} speed={active ? 1 : 0} reducedMotion={reducedMotion} />
-    <group position={[0, 1.58, 0]}><SceneLabel text="YOU" kind="player" /></group>
+    <CharacterRig color={PALETTE.corporate} hair="#394c5b" pose={pose} speed={active ? 1 : 0} reducedMotion={reducedMotion} expression={gesture.current > 0 ? 'happy' : 'neutral'} />
+    <group position={[0, 1.88, 0]}><SceneLabel text="YOU" kind="player" /></group>
   </group>;
 }
 
@@ -429,12 +497,12 @@ function SceneLabel({ text, kind, selected = false }: { text: string; kind: 'roo
       context.scale(2, 2);
       context.beginPath();
       context.roundRect(1, 1, width - 2, height - 2, room ? 8 : 7);
-      context.fillStyle = kind === 'player' ? '#597f8d' : selected ? '#fcf8ec' : '#faf8f0';
+      context.fillStyle = kind === 'player' ? PALETTE.midnight : selected ? PALETTE.sand : PALETTE.cream;
       context.fill();
       context.lineWidth = 1.25;
       context.strokeStyle = selected ? '#c8ac70' : '#e8e2d5';
       context.stroke();
-      context.fillStyle = kind === 'player' ? '#ffffff' : kind === 'npc' ? '#667d7b' : '#617777';
+      context.fillStyle = kind === 'player' ? '#ffffff' : PALETTE.midnight;
       context.font = `800 ${fontSize}px Arial, sans-serif`;
       context.textAlign = 'center';
       context.textBaseline = 'middle';
@@ -473,6 +541,8 @@ function CameraRig({ room, floorView, mode }: { room: Room; floorView: FloorView
   }, [room.id, floorView, mode]);
   useFrame((_, delta) => {
     if (mode !== 'director' || !animating.current) return;
+    const perspective = camera as THREE.PerspectiveCamera;
+    if (Math.abs(perspective.fov - 34) > .01) { perspective.fov = THREE.MathUtils.damp(perspective.fov, 34, 6, delta); perspective.updateProjectionMatrix(); }
     const weight = 1 - Math.exp(-3.2 * delta);
     camera.position.lerp(goal, weight);
     if (controls.current) {

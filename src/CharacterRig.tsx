@@ -1,274 +1,390 @@
-import { useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { CHARACTER_STANDARD, PALETTE, SURFACES } from './artDirection';
+import { characterProfile } from './characterProfiles';
 
 export type Pose = 'idle' | 'walk' | 'work' | 'talk' | 'wave' | 'coffee' | 'think' | 'eat'
   | 'read' | 'repair' | 'cook' | 'sign' | 'inspect' | 'stairs' | 'toilet';
+export type CharacterExpression = 'neutral' | 'happy' | 'focused';
 type Props = {
   color: string; hair: string; pose: Pose | RefObject<Pose>; speed: number;
-  reducedMotion: boolean; variant?: number; seated?: boolean;
+  reducedMotion: boolean; variant?: number; seated?: boolean; expression?: CharacterExpression;
 };
-const HIP = 0.88, SEATED_HIP = 0.64, THIGH = 0.29, SHIN = 0.52, UPPER_ARM = 0.25, FOREARM = 0.24;
-const SKIN_TONES = ['#dfb798', '#e9c3a5', '#edc9af', '#c89673', '#bc8d70', '#d5ad8f', '#e5bda1', '#c99e7b', '#d3b49c'];
+type Surface = keyof typeof SURFACES;
+type Materials = { skin: THREE.MeshStandardMaterial; hair: THREE.MeshStandardMaterial; clothing: THREE.MeshStandardMaterial;
+  trousers: THREE.MeshStandardMaterial; shirt: THREE.MeshStandardMaterial; accent: THREE.MeshStandardMaterial;
+  shoe: THREE.MeshStandardMaterial; sole: THREE.MeshStandardMaterial; eye: THREE.MeshStandardMaterial;
+  iris: THREE.MeshStandardMaterial; dark: THREE.MeshStandardMaterial; lip: THREE.MeshStandardMaterial;
+  blush: THREE.MeshStandardMaterial; metal: THREE.MeshStandardMaterial };
+type Vec3 = [number, number, number];
 
-// Actors face local +z. Furniture owns the chair; the same articulated rig sits or stands.
-export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant = 0, seated = false }: Props) {
-  const root = useRef<THREE.Group>(null), head = useRef<THREE.Group>(null);
+const HIP = 0.8, THIGH = 0.31, SHIN = 0.415, UPPER_ARM = 0.235, FOREARM = 0.225;
+const SEATED_HIP = CHARACTER_STANDARD.seatHeight;
+// Resting biases give each personality a quiet presence without changing active gestures.
+const RESTING_POSTURES = [
+  { headX: 0, headY: 0, headZ: 0, leftShoulder: 0.015, rightShoulder: 0.015, leftElbow: -0.1, rightElbow: -0.1, leftSpread: 0.04, rightSpread: -0.04 },
+  { headX: -0.01, headY: 0.025, headZ: -0.035, leftShoulder: 0.025, rightShoulder: -0.1, leftElbow: -0.09, rightElbow: -0.24, leftSpread: 0.075, rightSpread: -0.065 },
+  { headX: 0.005, headY: -0.012, headZ: 0.027, leftShoulder: -0.045, rightShoulder: -0.025, leftElbow: -0.16, rightElbow: -0.12, leftSpread: 0.06, rightSpread: -0.055 },
+  { headX: 0.018, headY: -0.025, headZ: -0.015, leftShoulder: -0.035, rightShoulder: -0.065, leftElbow: -0.13, rightElbow: -0.18, leftSpread: 0.045, rightSpread: -0.05 },
+  { headX: -0.012, headY: 0.02, headZ: 0.018, leftShoulder: 0.045, rightShoulder: -0.02, leftElbow: -0.1, rightElbow: -0.14, leftSpread: 0.085, rightSpread: -0.075 },
+  { headX: 0.042, headY: 0.01, headZ: -0.008, leftShoulder: -0.025, rightShoulder: -0.04, leftElbow: -0.14, rightElbow: -0.16, leftSpread: 0.035, rightSpread: -0.035 },
+  { headX: -0.005, headY: 0, headZ: 0.012, leftShoulder: -0.3, rightShoulder: -0.3, leftElbow: -0.65, rightElbow: -0.61, leftSpread: 0.28, rightSpread: -0.28 },
+  { headX: -0.012, headY: 0, headZ: 0, leftShoulder: 0.01, rightShoulder: -0.025, leftElbow: -0.1, rightElbow: -0.15, leftSpread: 0.045, rightSpread: -0.045 },
+  { headX: 0, headY: -0.018, headZ: 0.014, leftShoulder: -0.025, rightShoulder: 0.015, leftElbow: -0.14, rightElbow: -0.1, leftSpread: 0.055, rightSpread: -0.055 },
+] as const;
+// Immutable mesh resources are shared by the entire cast, including the avatar.
+const SHAPES = {
+  sphere: new THREE.SphereGeometry(1, 16, 12),
+  detail: new THREE.SphereGeometry(1, 10, 8),
+  box: new RoundedBoxGeometry(1, 1, 1, 2, 0.12),
+  // Broad cloth ends meet inside joints; a pill's pointed caps exposed toy-like gaps.
+  limb: new THREE.LatheGeometry([
+    new THREE.Vector2(0, -0.5), new THREE.Vector2(0.8, -0.5),
+    new THREE.Vector2(0.86, -0.47), new THREE.Vector2(0.9, -0.39),
+    new THREE.Vector2(0.94, -0.15), new THREE.Vector2(0.99, 0.25),
+    new THREE.Vector2(1, 0.4), new THREE.Vector2(0.97, 0.48),
+    new THREE.Vector2(0.89, 0.5), new THREE.Vector2(0, 0.5),
+  ], 12),
+  pelvis: new THREE.LatheGeometry([
+    new THREE.Vector2(0, -0.5), new THREE.Vector2(0.73, -0.5),
+    new THREE.Vector2(0.91, -0.42), new THREE.Vector2(1, -0.18),
+    new THREE.Vector2(0.98, 0.15), new THREE.Vector2(0.87, 0.44),
+    new THREE.Vector2(0.78, 0.5), new THREE.Vector2(0, 0.5),
+  ], 16),
+  cylinder: new THREE.CylinderGeometry(1, 1, 1, 12),
+  ring: new THREE.TorusGeometry(1, 0.11, 5, 16),
+  smile: new THREE.TorusGeometry(1, 0.12, 5, 16, Math.PI),
+  hairCap: new THREE.SphereGeometry(1, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.54),
+  torso: new THREE.LatheGeometry([
+    new THREE.Vector2(0.09, -0.175), new THREE.Vector2(0.15, -0.17),
+    new THREE.Vector2(0.163, -0.12), new THREE.Vector2(0.173, -0.025),
+    new THREE.Vector2(0.188, 0.095), new THREE.Vector2(0.181, 0.145),
+    new THREE.Vector2(0.146, 0.177), new THREE.Vector2(0.069, 0.185),
+  ], 16),
+};
+const materials = new Map<string, THREE.MeshStandardMaterial>();
+function material(color: string, surface: Surface = 'fabric', opacity = 1) {
+  const key = `${color}/${surface}/${opacity}`;
+  let result = materials.get(key);
+  if (!result) {
+    result = new THREE.MeshStandardMaterial({ color, ...SURFACES[surface], transparent: opacity < 1, opacity });
+    materials.set(key, result);
+  }
+  return result;
+}
+function castMaterials(color: string, hair: string, variant: number): Materials {
+  const profile = characterProfile(variant);
+  return {
+    skin: material(profile.skin, 'skin'), hair: material(hair), clothing: material(color),
+    trousers: material(profile.trousers), shirt: material(PALETTE.cream), accent: material(profile.accent, 'trim'),
+    shoe: material(variant === 4 || variant === 6 ? '#76604E' : '#35475D', 'wood'), sole: material('#DAD8CC'),
+    eye: material('#FFFCF6', 'skin'), iris: material(variant === 2 || variant === 3 ? '#54726B' : '#415C71', 'skin'),
+    dark: material('#25394D', 'skin'), lip: material('#956454', 'skin'),
+    blush: material('#D7897C', 'skin', 0.2), metal: material(variant === 7 ? '#BFA276' : '#52667D', 'trim'),
+  };
+}
+
+// Local +Z is forward. The same proportions and joints are used in both camera modes.
+export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant = 0, seated = false, expression = 'neutral' }: Props) {
+  const root = useRef<THREE.Group>(null), torso = useRef<THREE.Group>(null), head = useRef<THREE.Group>(null);
   const leftArm = useRef<THREE.Group>(null), rightArm = useRef<THREE.Group>(null);
   const leftForearm = useRef<THREE.Group>(null), rightForearm = useRef<THREE.Group>(null);
   const leftLeg = useRef<THREE.Group>(null), rightLeg = useRef<THREE.Group>(null);
   const leftKnee = useRef<THREE.Group>(null), rightKnee = useRef<THREE.Group>(null);
-  const eyes = useRef<THREE.Group>(null), mug = useRef<THREE.Group>(null), tablet = useRef<THREE.Group>(null);
-  const bowl = useRef<THREE.Group>(null), spoon = useRef<THREE.Group>(null);
-  const book = useRef<THREE.Group>(null), tool = useRef<THREE.Group>(null);
-  const pan = useRef<THREE.Group>(null), pen = useRef<THREE.Group>(null);
-  const time = useRef(variant * 0.73), sitting = useRef(seated ? 1 : 0);
-  // A paused save mounts in its saved posture; later changes blend smoothly.
-  const initial = useRef({ seated, pose: typeof pose === 'string' ? pose : pose.current });
-  const skin = SKIN_TONES[((Math.floor(variant) % SKIN_TONES.length) + SKIN_TONES.length) % SKIN_TONES.length];
+  const eyes = useRef<THREE.Group>(null), brows = useRef<THREE.Group>(null), mouth = useRef<THREE.Group>(null);
+  const ponytail = useRef<THREE.Group>(null), mug = useRef<THREE.Group>(null), tablet = useRef<THREE.Group>(null);
+  const bowl = useRef<THREE.Group>(null), spoon = useRef<THREE.Group>(null), book = useRef<THREE.Group>(null);
+  const tool = useRef<THREE.Group>(null), pan = useRef<THREE.Group>(null), pen = useRef<THREE.Group>(null);
+  const time = useRef(variant * 0.83), sitting = useRef(seated ? 1 : 0);
+  const previous = useRef({ pose: '', seated, expression });
+  const mat = castMaterials(color, hair, variant);
   const feminine = variant === 1 || variant === 2 || variant === 6;
-  const founder = variant === 7, visitor = variant === 8;
-  const jacket = founder ? '#344a67' : visitor ? '#777f87' : color;
-  const trousers = founder ? '#2c3a50' : visitor ? '#515963' : feminine ? '#526471' : variant === 4 ? '#716854' : '#485d6a';
-  useFrame((_, delta) => {
-    if (!root.current || !head.current || !leftArm.current || !rightArm.current || !leftForearm.current || !rightForearm.current
-      || !leftLeg.current || !rightLeg.current || !leftKnee.current || !rightKnee.current || speed === 0) return;
+  const shortSleeve = variant === 4;
+  const resting = RESTING_POSTURES[((Math.floor(variant) % RESTING_POSTURES.length) + RESTING_POSTURES.length) % RESTING_POSTURES.length];
+
+  function animate(delta: number, immediate = false) {
+    if (!root.current || !torso.current || !head.current || !leftArm.current || !rightArm.current
+      || !leftForearm.current || !rightForearm.current || !leftLeg.current || !rightLeg.current || !leftKnee.current || !rightKnee.current) return;
     const state = typeof pose === 'string' ? pose : pose.current;
-    const dt = Math.min(delta, 0.1);
-    time.current += dt * Math.min(speed, 2);
-    const t = time.current, stairWalking = state === 'stairs' && !seated;
-    const cycle = Math.sin(t * (stairWalking ? 4 : 5)), subtle = reducedMotion ? 0 : 1;
-    const walking = (state === 'walk' || stairWalking) && !seated, chatting = state === 'talk';
-    const working = state === 'work', thinking = state === 'think', coffee = state === 'coffee', eating = state === 'eat';
-    const reading = state === 'read', repairing = state === 'repair', cooking = state === 'cook', signing = state === 'sign', inspecting = state === 'inspect';
-    const blend = 1 - Math.exp(-10 * dt);
-    const ease = (value: number, target: number) => THREE.MathUtils.lerp(value, target, blend);
+    const changed = previous.current.pose !== state || previous.current.seated !== seated || previous.current.expression !== expression;
+    if (speed === 0 && !immediate && !changed) return;
+    const dt = Math.min(delta, 0.075);
+    const snap = immediate || speed === 0;
+    if (!snap) time.current += dt * Math.min(speed, 2);
+    const t = time.current, subtle = reducedMotion ? 0 : 1;
+    const walk = (state === 'walk' || state === 'stairs') && !seated;
+    const cycle = Math.sin(t * (state === 'stairs' ? 3.5 : 4.2));
+    const ease = (value: number, target: number) => snap ? target : THREE.MathUtils.lerp(value, target, 1 - Math.exp(-8 * dt));
     sitting.current = ease(sitting.current, seated ? 1 : 0);
     const sit = sitting.current;
-    root.current.position.y = ease(root.current.position.y,
-      (SEATED_HIP - HIP) * sit + (walking ? Math.abs(cycle) * (stairWalking ? 0.018 : 0.02) : Math.sin(t * 1.8) * 0.005) * subtle);
-    root.current.rotation.z = ease(root.current.rotation.z, walking ? Math.sin(t * (stairWalking ? 2 : 2.5)) * 0.02 * subtle : 0);
-    root.current.rotation.x = ease(root.current.rotation.x, seated && working ? 0.035 : stairWalking ? -0.035 : 0);
-    leftLeg.current.rotation.x = ease(leftLeg.current.rotation.x, -Math.PI / 2 * sit + (walking ? cycle * (stairWalking ? 0.47 : 0.34) * subtle : 0));
-    rightLeg.current.rotation.x = ease(rightLeg.current.rotation.x, -Math.PI / 2 * sit + (walking ? -cycle * (stairWalking ? 0.47 : 0.34) * subtle : 0));
-    leftKnee.current.rotation.x = ease(leftKnee.current.rotation.x, Math.PI / 2 * sit + (walking ? Math.max(0, -cycle) * (stairWalking ? 0.65 : 0.3) * subtle : 0));
-    rightKnee.current.rotation.x = ease(rightKnee.current.rotation.x, Math.PI / 2 * sit + (walking ? Math.max(0, cycle) * (stairWalking ? 0.65 : 0.3) * subtle : 0));
-    leftLeg.current.rotation.z = ease(leftLeg.current.rotation.z, seated ? -0.025 : 0);
-    rightLeg.current.rotation.z = ease(rightLeg.current.rotation.z, seated ? 0.025 : 0);
-    const { leftShoulder, rightShoulder, leftElbow, rightElbow, leftSpread, rightSpread } = armTargets(state, seated, t, subtle);
-    leftArm.current.rotation.x = ease(leftArm.current.rotation.x, leftShoulder);
-    rightArm.current.rotation.x = ease(rightArm.current.rotation.x, rightShoulder);
-    leftArm.current.rotation.z = ease(leftArm.current.rotation.z, leftSpread);
-    rightArm.current.rotation.z = ease(rightArm.current.rotation.z, rightSpread);
-    leftForearm.current.rotation.x = ease(leftForearm.current.rotation.x, leftElbow);
-    rightForearm.current.rotation.x = ease(rightForearm.current.rotation.x, rightElbow);
-    rightForearm.current.rotation.y = ease(rightForearm.current.rotation.y, cooking ? Math.cos(t * 2.8) * 0.13 * subtle : signing ? Math.sin(t * 4) * 0.06 * subtle : 0);
-    head.current.rotation.x = ease(head.current.rotation.x,
-      working || reading || signing ? 0.16 + Math.sin(t * 1.3) * 0.025 * subtle : repairing || cooking ? 0.1 : chatting ? Math.sin(t * 3.1) * 0.055 * subtle : thinking ? 0.06 : eating ? 0.045 : 0);
-    head.current.rotation.y = ease(head.current.rotation.y, inspecting ? Math.sin(t * 0.8) * 0.12 * subtle : chatting ? Math.sin(t * 1.5) * 0.06 * subtle : 0);
-    head.current.rotation.z = ease(head.current.rotation.z, thinking ? 0.09 : Math.sin(t * 1.2) * 0.015 * subtle);
-    if (eyes.current) eyes.current.scale.y = !reducedMotion && t % 5.1 > 4.96 ? 0.12 : 1;
-    if (mug.current) mug.current.visible = coffee;
-    if (tablet.current) tablet.current.visible = working && !seated || repairing || inspecting;
-    if (bowl.current) bowl.current.visible = eating;
-    if (spoon.current) spoon.current.visible = eating || cooking;
-    if (book.current) book.current.visible = reading;
-    if (tool.current) tool.current.visible = repairing;
-    if (pan.current) pan.current.visible = cooking;
-    if (pen.current) pen.current.visible = signing;
-  });
-  const mountPose = initial.current.pose, mountSeated = initial.current.seated;
-  const mountArms = armTargets(mountPose, mountSeated, 0, 0);
-  return <group ref={root} position={[0, initial.current.seated ? SEATED_HIP - HIP : 0, 0]}>
-    <mesh position={[0, HIP, 0]} scale={[1, 0.65, 0.85]} castShadow><capsuleGeometry args={[0.17, 0.04, 4, 12]} /><meshStandardMaterial color={trousers} roughness={0.9} /></mesh>
-    <mesh position={[0, HIP + 0.205, 0]} scale={[1, 0.68, 0.76]} castShadow><capsuleGeometry args={[feminine ? 0.176 : 0.19, 0.15, 4, 12]} /><meshStandardMaterial color={jacket} roughness={0.86} /></mesh>
-    <mesh position={[0, HIP + 0.31, 0.139]}><boxGeometry args={[0.105, 0.125, 0.02]} /><meshStandardMaterial color="#f7efe1" roughness={0.85} /></mesh>
-    <mesh position={[0, HIP + 0.25, 0.151]} rotation={[0, 0, Math.PI / 4]}><boxGeometry args={[0.045, 0.045, 0.012]} /><meshStandardMaterial color={variant === 6 || founder ? '#ddb575' : visitor ? '#5e646f' : '#9ec3d1'} metalness={0.2} roughness={0.6} /></mesh>
-    {(founder || visitor) && <>
-      {[-1, 1].map(side => <mesh key={`lapel-${side}`} position={[side * 0.079, HIP + 0.28, 0.153]} rotation={[0, 0, side * 0.31]}><boxGeometry args={[0.037, 0.15, 0.014]} /><meshStandardMaterial color={founder ? '#253950' : '#626a73'} roughness={0.9} /></mesh>)}
-      {[0, 1].map(i => <mesh key={`button-${i}`} position={[0, HIP + 0.16 - i * 0.047, 0.15]}><sphereGeometry args={[0.008, 6, 4]} /><meshStandardMaterial color={founder ? '#c8b184' : '#3f4c56'} metalness={0.3} /></mesh>)}
-      {visitor && <mesh position={[0, HIP + 0.3, 0.163]}><boxGeometry args={[0.023, 0.09, 0.009]} /><meshStandardMaterial color="#535c6b" /></mesh>}
-    </>}
-    <mesh position={[0.107, HIP + 0.22, 0.145]}><boxGeometry args={[0.048, 0.07, 0.012]} /><meshStandardMaterial color="#fbf4e9" /></mesh>
-    <mesh position={[0.107, HIP + 0.235, 0.153]}><boxGeometry args={[0.034, 0.009, 0.005]} /><meshStandardMaterial color="#688ca1" /></mesh>
-    <mesh position={[0, HIP + 0.41, 0]}><cylinderGeometry args={[0.057, 0.064, 0.13, 10]} /><meshStandardMaterial color={skin} roughness={0.9} /></mesh>
-    <group ref={head} position={[0, HIP + 0.505, 0]} rotation={['work','read','sign'].includes(mountPose) ? [0.16, 0, 0] : [0, 0, mountPose === 'think' ? 0.09 : 0]}>
-      <mesh scale={[founder ? 1.02 : visitor ? 0.91 : 0.94, founder ? 0.99 : 1.04, 0.95]} castShadow><sphereGeometry args={[0.192, 18, 14]} /><meshStandardMaterial color={skin} roughness={0.83} /></mesh>
-      {[-1, 1].map(side => <mesh key={`ear-${side}`} position={[side * 0.183, -0.007, -0.012]} scale={[0.6, 1, 0.85]}><sphereGeometry args={[0.046, 10, 8]} /><meshStandardMaterial color={skin} roughness={0.87} /></mesh>)}
-      <Hair hair={hair} variant={variant} />
-      <group ref={eyes} position={[0, 0.006, 0.181]}>{[-0.068, 0.068].map(x => <group key={x} position={[x, 0, 0]}>
-        <mesh scale={[1, 0.85, 0.5]}><sphereGeometry args={[0.027, 10, 8]} /><meshStandardMaterial color="#fffaf2" /></mesh>
-        <mesh position={[0, 0, 0.012]} scale={[0.78, 1, 0.5]}><sphereGeometry args={[0.018, 10, 8]} /><meshStandardMaterial color={variant === 2 ? '#578077' : '#354d58'} /></mesh>
-        <mesh position={[0.005, 0.007, 0.021]}><sphereGeometry args={[0.005, 6, 4]} /><meshStandardMaterial color="#ffffff" /></mesh>
-      </group>)}</group>
-      {[-0.069, 0.069].map(x => <mesh key={`brow-${x}`} position={[x, 0.052, 0.177]} rotation={[0, 0, x < 0 ? 0.08 : -0.08]}><boxGeometry args={[0.047, 0.009, 0.014]} /><meshStandardMaterial color={hair} /></mesh>)}
-      <mesh position={[0, -0.023, 0.185]} scale={[0.7, 1, 0.85]}><sphereGeometry args={[0.028, 10, 8]} /><meshStandardMaterial color={skin} /></mesh>
-      {[-0.105, 0.105].map(x => <mesh key={`cheek-${x}`} position={[x, -0.047, 0.148]} scale={[1.2, 0.55, 0.3]}><sphereGeometry args={[0.03, 8, 6]} /><meshStandardMaterial color="#cf9788" transparent opacity={0.28} /></mesh>)}
-      <mesh position={[0, -0.079, 0.165]} rotation={[0, 0, Math.PI]}><torusGeometry args={[0.033, 0.006, 5, 14, Math.PI]} /><meshStandardMaterial color="#965f58" /></mesh>
-      {(variant === 3 || variant === 4 || variant === 5 || founder) && <Glasses founder={founder} />}
-      {founder && <mesh position={[0, -0.096, 0.127]} scale={[1.3, 0.44, 0.26]}><sphereGeometry args={[0.072, 12, 8]} /><meshStandardMaterial color={hair} transparent opacity={0.27} roughness={1} /></mesh>}
-      {variant === 6 && [-1, 1].map(side => <mesh key={`earring-${side}`} position={[side * 0.193, -0.044, 0.003]}><sphereGeometry args={[0.012, 8, 6]} /><meshStandardMaterial color="#d8b879" metalness={0.65} roughness={0.35} /></mesh>)}
+    root.current.position.y = ease(root.current.position.y, (SEATED_HIP - HIP) * sit
+      + (walk ? Math.abs(cycle) * 0.011 : Math.sin(t * 1.7) * 0.003) * subtle);
+    root.current.rotation.z = ease(root.current.rotation.z, walk ? Math.sin(t * 2.1) * 0.018 * subtle : 0);
+    torso.current.rotation.y = ease(torso.current.rotation.y, walk ? cycle * 0.035 * subtle : state === 'talk' ? Math.sin(t * 1.1) * 0.025 * subtle : 0);
+    torso.current.scale.y = ease(torso.current.scale.y, 1 + (!walk ? Math.sin(t * 1.7) * 0.004 * subtle : 0));
+    // A slight downward thigh slope places the soles on the floor at the shared .64 seat height.
+    const seatedThigh = -1.09 * sit;
+    leftLeg.current.rotation.x = ease(leftLeg.current.rotation.x, seatedThigh + (walk ? cycle * (state === 'stairs' ? 0.48 : 0.33) * subtle : 0));
+    rightLeg.current.rotation.x = ease(rightLeg.current.rotation.x, seatedThigh + (walk ? -cycle * (state === 'stairs' ? 0.48 : 0.33) * subtle : 0));
+    leftKnee.current.rotation.x = ease(leftKnee.current.rotation.x, 1.09 * sit + (walk ? Math.max(0, -cycle) * (state === 'stairs' ? 0.7 : 0.4) * subtle : 0));
+    rightKnee.current.rotation.x = ease(rightKnee.current.rotation.x, 1.09 * sit + (walk ? Math.max(0, cycle) * (state === 'stairs' ? 0.7 : 0.4) * subtle : 0));
+    leftLeg.current.rotation.z = ease(leftLeg.current.rotation.z, -0.025 * sit);
+    rightLeg.current.rotation.z = ease(rightLeg.current.rotation.z, 0.025 * sit);
+    const targets = state === 'idle' && !seated ? resting : armTargets(state, seated, t, subtle);
+    leftArm.current.rotation.x = ease(leftArm.current.rotation.x, targets.leftShoulder);
+    rightArm.current.rotation.x = ease(rightArm.current.rotation.x, targets.rightShoulder);
+    leftArm.current.rotation.z = ease(leftArm.current.rotation.z, targets.leftSpread);
+    rightArm.current.rotation.z = ease(rightArm.current.rotation.z, targets.rightSpread);
+    leftForearm.current.rotation.x = ease(leftForearm.current.rotation.x, targets.leftElbow);
+    rightForearm.current.rotation.x = ease(rightForearm.current.rotation.x, targets.rightElbow);
+    rightForearm.current.rotation.y = ease(rightForearm.current.rotation.y,
+      state === 'cook' ? Math.sin(t * 2.2) * 0.13 * subtle : state === 'sign' ? Math.sin(t * 3.8) * 0.05 * subtle : 0);
+    head.current.rotation.x = ease(head.current.rotation.x, ['work', 'read', 'sign'].includes(state) ? 0.12 + Math.sin(t * 1.2) * 0.02 * subtle
+      : state === 'talk' ? Math.sin(t * 2.3) * 0.04 * subtle : state === 'repair' || state === 'cook' ? 0.1 : state === 'idle' ? resting.headX : 0);
+    head.current.rotation.y = ease(head.current.rotation.y, state === 'inspect' ? Math.sin(t * 0.7) * 0.13 * subtle
+      : state === 'talk' ? Math.sin(t * 1.1) * 0.09 * subtle : walk ? -cycle * 0.02 * subtle : state === 'idle' ? resting.headY : 0);
+    head.current.rotation.z = ease(head.current.rotation.z, state === 'think' ? 0.07
+      : (state === 'idle' ? resting.headZ : 0) + Math.sin(t * 0.9) * 0.012 * subtle);
+    if (ponytail.current) ponytail.current.rotation.x = ease(ponytail.current.rotation.x, walk ? -cycle * 0.06 * subtle : 0);
+    const focused = expression === 'focused' || expression === 'neutral' && ['work', 'read', 'repair', 'sign'].includes(state);
+    const happy = expression === 'happy' || expression === 'neutral' && ['talk', 'wave', 'coffee'].includes(state);
+    const blinkPhase = t % 4.7;
+    const eyelid = !reducedMotion && speed > 0 && blinkPhase > 4.52
+      ? 1 - Math.sin((blinkPhase - 4.52) / 0.18 * Math.PI) * 0.93 : 1;
+    if (eyes.current) eyes.current.scale.y = (focused ? 0.84 : happy ? 0.91 : 1) * eyelid;
+    if (brows.current) { brows.current.position.y = ease(brows.current.position.y, focused ? -0.008 : happy ? 0.009 : 0); brows.current.rotation.z = ease(brows.current.rotation.z, state === 'think' ? 0.05 : 0); }
+    if (mouth.current) { mouth.current.scale.x = ease(mouth.current.scale.x, happy ? 1.13 : focused ? 0.8 : 1); mouth.current.scale.y = ease(mouth.current.scale.y, happy ? 1.05 : focused ? 0.34 : 0.68); }
+    if (mug.current) {
+      mug.current.visible = state === 'coffee';
+      const sip = (Math.sin(t * 0.62) + 1) / 2 * subtle;
+      mug.current.rotation.x = ease(mug.current.rotation.x,
+        -rightArm.current.rotation.x - rightForearm.current.rotation.x + sip * 0.35);
+    }
+    if (tablet.current) tablet.current.visible = state === 'work' && !seated || state === 'inspect';
+    if (bowl.current) bowl.current.visible = state === 'eat';
+    if (spoon.current) spoon.current.visible = state === 'eat' || state === 'cook';
+    if (book.current) book.current.visible = state === 'read';
+    if (tool.current) tool.current.visible = state === 'repair';
+    if (pan.current) pan.current.visible = state === 'cook';
+    if (pen.current) pen.current.visible = state === 'sign';
+    previous.current = { pose: state, seated, expression };
+  }
+  // Mount every saved pose exactly, even when the simulation is paused.
+  useLayoutEffect(() => { animate(0, true); }, []);
+  useFrame((_, delta) => animate(delta));
+
+  return <group ref={root} dispose={null}>
+    <mesh geometry={SHAPES.pelvis} material={mat.trousers} position={[0, HIP + 0.054, 0]} scale={[0.165, 0.174, 0.116]} castShadow />
+    <group ref={torso} position={[0, HIP + 0.21, 0]}>
+      <mesh geometry={SHAPES.torso} material={mat.clothing} scale={[feminine ? 0.93 : 1, 1, 0.72]} castShadow />
+      <SoftBox position={[0, 0.122, 0.115]} scale={[0.106, 0.113, 0.019]} mat={mat.shirt} />
+      {[-1, 1].map(side => <SoftBox key={`collar${side}`} position={[side * 0.038, 0.159, 0.116]} scale={[0.055, 0.054, 0.016]} rotation={[0, 0, side * 0.28]} mat={mat.shirt} />)}
+      {(variant === 0 || variant === 3 || variant === 7 || variant === 8) && <>
+        {[-1, 1].map(side => <SoftBox key={`lapel${side}`} position={[side * 0.073, 0.078, 0.12]} scale={[0.039, 0.157, 0.022]} rotation={[0, 0, side * 0.21]} mat={mat.clothing} />)}
+        {[0, 1].map(button => <Ball key={`button${button}`} position={[0, -0.016 - button * 0.043, 0.121]} scale={[0.007, 0.007, 0.006]} mat={mat.accent} detail />)}
+      </>}
+      <SoftBox position={[0.098, 0.02, 0.132]} scale={[0.05, 0.061, 0.012]} mat={mat.shirt} />
+      <SoftBox position={[0.098, 0.034, 0.14]} scale={[0.034, 0.008, 0.005]} mat={mat.accent} />
+      {variant === 6 && <mesh geometry={SHAPES.smile} material={mat.accent} position={[-0.086, 0.084, 0.138]} scale={[0.018, 0.018, 0.018]} rotation={[0, 0, -0.25]} />}
+      <SoftBox position={[0, -0.165, 0]} scale={[0.276, 0.018, 0.207]} mat={mat.clothing} />
     </group>
-    <group ref={leftArm} position={[-0.222, HIP + 0.31, 0]} rotation={[mountArms.leftShoulder, 0, mountArms.leftSpread]}>
-      <UpperArm color={jacket} skin={skin} />
-      <group ref={leftForearm} position={[0, -UPPER_ARM, 0]} rotation={[mountArms.leftElbow, 0, 0]}>
-        <Forearm color={jacket} skin={skin} />
-        <group ref={bowl} position={[0, -FOREARM - 0.01, 0.075]} visible={initial.current.pose === 'eat'}>
-          <mesh rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.1, 0.066, 0.04, 14]} /><meshStandardMaterial color="#f6e6c6" roughness={0.7} /></mesh>
-          <mesh position={[0, 0, 0.024]} scale={[1, 1, 0.5]}><sphereGeometry args={[0.068, 10, 8]} /><meshStandardMaterial color="#b5bc78" roughness={1} /></mesh>
-        </group>
-        <group ref={pan} position={[0.04, -FOREARM - 0.01, 0.08]} rotation={[Math.PI / 2, 0, 0]} visible={mountPose === 'cook'}>
-          <mesh><cylinderGeometry args={[0.115, 0.093, 0.035, 14]} /><meshStandardMaterial color="#61747a" metalness={0.55} roughness={0.58} /></mesh>
-          <mesh position={[0, 0.02, 0]}><cylinderGeometry args={[0.102, 0.102, 0.006, 14]} /><meshStandardMaterial color="#b4a872" roughness={0.95} /></mesh>
-          <mesh position={[-0.13, 0, 0]}><boxGeometry args={[0.15, 0.025, 0.029]} /><meshStandardMaterial color="#394851" roughness={0.75} /></mesh>
-        </group>
+    <mesh geometry={SHAPES.cylinder} material={mat.skin} position={[0, HIP + 0.423, 0]} scale={[0.052, 0.105, 0.052]} />
+    <group ref={head} position={[0, HIP + 0.583, 0]}>
+      <Ball scale={[0.203, 0.212, 0.189]} mat={mat.skin} />
+      <Ball position={[0, -0.097, 0.045]} scale={[0.137, 0.103, 0.129]} mat={mat.skin} />
+      {[-1, 1].map(side => <group key={`ear${side}`} position={[side * 0.196, -0.008, -0.012]}>
+        <Ball scale={[0.029, 0.043, 0.027]} mat={mat.skin} detail />
+        <Ball position={[side * 0.016, 0, 0.012]} scale={[0.009, 0.024, 0.01]} mat={mat.blush} detail />
+        {variant === 6 && <Ball position={[side * 0.012, -0.035, 0]} scale={[0.009, 0.011, 0.009]} mat={mat.accent} detail />}
+      </group>)}
+      <Hair mat={mat.hair} accent={mat.accent} variant={variant} ponytail={ponytail} />
+      <group ref={eyes} position={[0, 0.018, 0.178]}>
+        {[-1, 1].map(side => <group key={`eye${side}`} position={[side * 0.067, 0, 0]}>
+          <Ball scale={[0.029, 0.033, 0.013]} mat={mat.eye} detail />
+          <Ball position={[0, -0.001, 0.011]} scale={[0.018, 0.023, 0.007]} mat={mat.iris} detail />
+          <Ball position={[0, -0.001, 0.015]} scale={[0.01, 0.016, 0.004]} mat={mat.dark} detail />
+          <Ball position={[-0.006, 0.007, 0.019]} scale={[0.005, 0.006, 0.003]} mat={mat.eye} detail />
+        </group>)}
       </group>
-    </group>
-    <group ref={rightArm} position={[0.222, HIP + 0.31, 0]} rotation={[mountArms.rightShoulder, 0, mountArms.rightSpread]}>
-      <UpperArm color={jacket} skin={skin} />
-      <group ref={rightForearm} position={[0, -UPPER_ARM, 0]} rotation={[mountArms.rightElbow, 0, 0]}>
-        <Forearm color={jacket} skin={skin} />
-        <group ref={mug} position={[0, -FOREARM - 0.035, 0.07]} rotation={[Math.PI / 2, 0, 0]} visible={initial.current.pose === 'coffee'}>
-          <mesh><cylinderGeometry args={[0.052, 0.046, 0.105, 12]} /><meshStandardMaterial color={variant === 6 ? '#ead7c7' : '#fbf3df'} roughness={0.58} /></mesh>
-          <mesh position={[0, 0.054, 0]}><cylinderGeometry args={[0.044, 0.044, 0.004, 12]} /><meshStandardMaterial color="#6f4936" roughness={0.6} /></mesh>
-          <mesh position={[0.055, 0, 0]} rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[0.031, 0.009, 6, 12]} /><meshStandardMaterial color="#fbf3df" /></mesh>
-        </group>
-        <group ref={spoon} position={[0, -FOREARM - 0.085, 0.055]} visible={mountPose === 'eat' || mountPose === 'cook'}>
-          <mesh><boxGeometry args={[0.012, 0.11, 0.01]} /><meshStandardMaterial color="#bac8cd" metalness={0.65} roughness={0.4} /></mesh>
-          <mesh position={[0, -0.065, 0]} scale={[0.7, 1, 0.25]}><sphereGeometry args={[0.024, 10, 8]} /><meshStandardMaterial color="#bac8cd" metalness={0.65} roughness={0.4} /></mesh>
-        </group>
-        <group ref={tool} position={[0, -FOREARM - 0.07, 0.045]} visible={mountPose === 'repair'}>
-          <mesh><boxGeometry args={[0.018, 0.14, 0.013]} /><meshStandardMaterial color="#bac4c8" metalness={0.65} roughness={0.4} /></mesh>
-          <mesh position={[0, -0.077, 0]}><torusGeometry args={[0.027, 0.009, 5, 12, Math.PI * 1.65]} /><meshStandardMaterial color="#bac4c8" metalness={0.65} roughness={0.4} /></mesh>
-          <mesh position={[0, 0.023, 0]}><boxGeometry args={[0.022, 0.042, 0.018]} /><meshStandardMaterial color="#657e8c" roughness={0.8} /></mesh>
-        </group>
-        <group ref={pen} position={[0.015, -FOREARM - 0.064, 0.055]} rotation={[0, 0, -0.15]} visible={mountPose === 'sign'}>
-          <mesh><cylinderGeometry args={[0.007, 0.007, 0.11, 8]} /><meshStandardMaterial color="#314756" roughness={0.5} /></mesh>
-          <mesh position={[0, -0.064, 0]}><coneGeometry args={[0.007, 0.018, 8]} /><meshStandardMaterial color="#b7c4c9" metalness={0.45} /></mesh>
-        </group>
+      <group ref={brows}>
+        {[-1, 1].map(side => <SoftBox key={`brow${side}`} position={[side * 0.066, 0.069, 0.176]} rotation={[0, side * 0.16, side * -0.07]} scale={[0.051, 0.011, 0.012]} mat={mat.hair} />)}
       </group>
+      <Ball position={[0, -0.021, 0.196]} scale={[0.02, 0.027, 0.025]} mat={mat.skin} detail />
+      {[-1, 1].map(side => <Ball key={`cheek${side}`} position={[side * 0.107, -0.052, 0.164]} scale={[0.035, 0.018, 0.007]} mat={mat.blush} detail />)}
+      <group ref={mouth} position={[0, -0.079, 0.184]}>
+        <mesh geometry={SHAPES.smile} material={mat.lip} rotation={[0, 0, Math.PI]} scale={[0.032, 0.026, 0.027]} />
+      </group>
+      {[3, 5, 7].includes(variant) && <Glasses mat={mat.metal} founder={variant === 7} />}
+      {variant === 7 && <Ball position={[0, -0.129, 0.14]} scale={[0.096, 0.027, 0.024]} mat={material(hair, 'fabric', 0.2)} detail />}
     </group>
-    {([-1, 1] as const).map(side => <group key={`leg-${side}`} ref={side === -1 ? leftLeg : rightLeg} position={[side * 0.108, HIP, 0]} rotation={[initial.current.seated ? -Math.PI / 2 : 0, 0, 0]}>
-      <mesh position={[0, -THIGH / 2, 0]} castShadow><capsuleGeometry args={[0.077, THIGH - 0.13, 4, 10]} /><meshStandardMaterial color={trousers} roughness={0.94} /></mesh>
-      <group ref={side === -1 ? leftKnee : rightKnee} position={[0, -THIGH, 0]} rotation={[initial.current.seated ? Math.PI / 2 : 0, 0, 0]}>
-        <mesh castShadow><sphereGeometry args={[0.074, 10, 8]} /><meshStandardMaterial color={trousers} roughness={0.94} /></mesh>
-        <mesh position={[0, -SHIN / 2, 0]} castShadow><capsuleGeometry args={[0.064, SHIN - 0.12, 4, 10]} /><meshStandardMaterial color={trousers} roughness={0.94} /></mesh>
-        <mesh position={[0, -SHIN + 0.003, 0.04]} scale={[1, 0.55, 1.5]} castShadow><capsuleGeometry args={[0.078, 0.035, 4, 10]} /><meshStandardMaterial color={variant === 6 ? '#725543' : '#354650'} roughness={0.7} /></mesh>
-        <mesh position={[0, -SHIN - 0.037, 0.04]}><boxGeometry args={[0.147, 0.022, 0.22]} /><meshStandardMaterial color="#d9d1c3" roughness={0.95} /></mesh>
+    {([-1, 1] as const).map(side => <group key={`arm${side}`} ref={side === -1 ? leftArm : rightArm} position={[side * 0.194, HIP + 0.35, 0]}>
+      <Ball position={[0, -0.02, 0]} scale={[0.059, 0.068, 0.058]} mat={mat.clothing} detail />
+      <Limb position={[0, -UPPER_ARM / 2, 0]} radius={0.054} length={UPPER_ARM} mat={mat.clothing} />
+      <group ref={side === -1 ? leftForearm : rightForearm} position={[0, -UPPER_ARM, 0]}>
+        <Ball scale={[0.042, 0.043, 0.041]} mat={shortSleeve ? mat.skin : mat.clothing} detail />
+        <Limb position={[0, -FOREARM / 2, 0]} radius={0.042} length={FOREARM} mat={shortSleeve ? mat.skin : mat.clothing} />
+        <SoftBox position={[0, shortSleeve ? -0.038 : -FOREARM + 0.037, 0]} scale={[0.095, 0.033, 0.086]} mat={shortSleeve ? mat.clothing : mat.shirt} />
+        <Hand mat={mat.skin} side={side} />
+        {side === -1 ? <>
+          <group ref={bowl} position={[0, -FOREARM - 0.014, 0.072]} rotation={[Math.PI / 2, 0, 0]} visible={false}>
+            <mesh geometry={SHAPES.sphere} material={material(PALETTE.cream, 'ceramic')} scale={[0.087, 0.032, 0.087]} />
+            <mesh geometry={SHAPES.cylinder} material={material('#A6AE72')} position={[0, 0.024, 0]} scale={[0.071, 0.007, 0.071]} />
+          </group>
+          <group ref={pan} position={[0.06, -FOREARM - 0.014, 0.08]} rotation={[Math.PI / 2, 0, 0]} visible={false}>
+            <mesh geometry={SHAPES.cylinder} material={material('#5B6A76', 'trim')} scale={[0.1, 0.028, 0.1]} />
+            <SoftBox position={[-0.14, 0, 0]} scale={[0.18, 0.025, 0.032]} mat={mat.dark} />
+          </group>
+        </> : <>
+          <group ref={mug} position={[0.02, -FOREARM - 0.017, 0.07]} rotation={[Math.PI / 2, 0, 0]} visible={false}>
+            <mesh geometry={SHAPES.cylinder} material={material(PALETTE.cream, 'ceramic')} scale={[0.044, 0.09, 0.044]} />
+            <mesh geometry={SHAPES.cylinder} material={material('#71523F', 'wood')} position={[0, 0.046, 0]} scale={[0.035, 0.002, 0.035]} />
+            <mesh geometry={SHAPES.ring} material={material(PALETTE.cream, 'ceramic')} position={[0.045, 0, 0]} rotation={[0, Math.PI / 2, 0]} scale={[0.029, 0.029, 0.029]} />
+          </group>
+          <group ref={spoon} position={[0, -FOREARM - 0.055, 0.045]} visible={false}>
+            <SoftBox scale={[0.01, 0.096, 0.009]} mat={material('#BAC6CF', 'trim')} />
+            <Ball position={[0, -0.055, 0]} scale={[0.017, 0.025, 0.005]} mat={material('#BAC6CF', 'trim')} detail />
+          </group>
+          <group ref={tool} position={[0, -FOREARM - 0.04, 0.042]} visible={false}>
+            <SoftBox scale={[0.025, 0.08, 0.025]} mat={mat.accent} />
+            <SoftBox position={[0, -0.052, 0]} scale={[0.011, 0.06, 0.012]} mat={mat.metal} />
+          </group>
+          <group ref={pen} position={[0.015, -FOREARM - 0.046, 0.054]} rotation={[0, 0, -0.15]} visible={false}>
+            <mesh geometry={SHAPES.cylinder} material={mat.dark} scale={[0.006, 0.1, 0.006]} />
+          </group>
+        </>}
       </group>
     </group>)}
-    <group ref={tablet} position={[0, HIP + 0.12, 0.29]} rotation={[-0.35, 0, 0]} visible={mountPose === 'work' && !mountSeated || mountPose === 'repair' || mountPose === 'inspect'}>
-      <mesh castShadow><boxGeometry args={[0.29, 0.19, 0.02]} /><meshStandardMaterial color="#425c6b" roughness={0.7} /></mesh>
-      <mesh position={[0, 0, 0.013]}><boxGeometry args={[0.255, 0.155, 0.005]} /><meshStandardMaterial color="#b4d8da" emissive="#89bac7" emissiveIntensity={0.2} /></mesh>
+    {([-1, 1] as const).map(side => <group key={`leg${side}`} ref={side === -1 ? leftLeg : rightLeg} position={[side * 0.094, HIP, 0]}>
+      <Limb position={[0, -THIGH / 2, 0]} radius={0.069} length={THIGH} mat={mat.trousers} />
+      <group ref={side === -1 ? leftKnee : rightKnee} position={[0, -THIGH, 0]}>
+        <Ball scale={[0.053, 0.049, 0.052]} mat={mat.trousers} detail />
+        <Limb position={[0, -SHIN / 2, 0]} radius={0.055} length={SHIN} mat={mat.trousers} />
+        <SoftBox position={[0, -SHIN + 0.016, 0]} scale={[0.116, 0.042, 0.11]} mat={mat.trousers} />
+        <SoftBox position={[0, -SHIN - 0.023, 0.043]} scale={[0.134, 0.086, 0.216]} mat={mat.shoe} />
+        <SoftBox position={[0, -SHIN - 0.06, 0.043]} scale={[0.139, 0.024, 0.22]} mat={mat.sole} />
+        <SoftBox position={[0, -SHIN + 0.019, 0.06]} scale={[0.087, 0.01, 0.05]} mat={mat.shirt} />
+      </group>
+    </group>)}
+    <group ref={tablet} position={[0, HIP + 0.07, 0.305]} rotation={[-0.38, 0, 0]} visible={false}>
+      <SoftBox scale={[0.258, 0.166, 0.022]} mat={mat.dark} />
+      <SoftBox position={[0, 0, 0.014]} scale={[0.223, 0.132, 0.006]} mat={material(PALETTE.sky, 'ceramic')} />
+      <SoftBox position={[-0.056, 0.03, 0.018]} scale={[0.08, 0.009, 0.002]} mat={mat.eye} />
     </group>
-    <group ref={book} position={[0, HIP + 0.105, 0.36]} rotation={[-0.65, 0, 0]} visible={mountPose === 'read'}>
-      {[-1, 1].map(side => <group key={`page-${side}`} position={[side * 0.08, 0, 0]} rotation={[0, side * -0.12, 0]}>
-        <mesh><boxGeometry args={[0.158, 0.18, 0.018]} /><meshStandardMaterial color="#667c78" roughness={0.9} /></mesh>
-        <mesh position={[0, 0, 0.015]}><boxGeometry args={[0.141, 0.163, 0.015]} /><meshStandardMaterial color="#f2ebd8" roughness={0.95} /></mesh>
-        {[0,1,2,3].map(line => <mesh key={line} position={[0, 0.049 - line * 0.025, 0.024]}><boxGeometry args={[0.102, 0.003, 0.002]} /><meshStandardMaterial color="#b5b4a9" /></mesh>)}
+    <group ref={book} position={[0, HIP + 0.135, 0.36]} rotation={[-0.61, 0, 0]} visible={false}>
+      {[-1, 1].map(side => <group key={`page${side}`} position={[side * 0.074, 0, 0]} rotation={[0, side * -0.15, 0]}>
+        <SoftBox scale={[0.148, 0.176, 0.018]} mat={mat.accent} />
+        <SoftBox position={[0, 0, 0.014]} scale={[0.136, 0.161, 0.012]} mat={mat.shirt} />
+        {[0, 1, 2].map(line => <SoftBox key={line} position={[0, 0.041 - line * 0.025, 0.022]} scale={[0.099, 0.003, 0.002]} mat={material('#B4B5A8')} />)}
       </group>)}
     </group>
   </group>;
 }
-// Share pose targets with the mount posture so a paused save displays every activity correctly.
+
 function armTargets(state: Pose, seated: boolean, t: number, subtle: number) {
-  let leftShoulder = 0.035, rightShoulder = 0.035, leftElbow = -0.08, rightElbow = -0.08;
-  let leftSpread = 0.06, rightSpread = -0.06;
-  const walking = (state === 'walk' || state === 'stairs') && !seated;
-  if (walking) {
-    const cycle = Math.sin(t * (state === 'stairs' ? 4 : 5));
-    leftShoulder = -cycle * (state === 'stairs' ? 0.24 : 0.29) * subtle;
-    rightShoulder = cycle * (state === 'stairs' ? 0.24 : 0.29) * subtle;
-    leftElbow = rightElbow = -0.15;
+  let leftShoulder = 0.02, rightShoulder = 0.02, leftElbow = -0.1, rightElbow = -0.1;
+  let leftSpread = 0.055, rightSpread = -0.055;
+  if ((state === 'walk' || state === 'stairs') && !seated) {
+    const cycle = Math.sin(t * (state === 'stairs' ? 3.5 : 4.2));
+    leftShoulder = -cycle * 0.24 * subtle; rightShoulder = cycle * 0.24 * subtle;
+    leftElbow = rightElbow = -0.17;
   } else if (state === 'work') {
-    leftShoulder = rightShoulder = seated ? -0.95 : -0.7;
-    leftElbow = (seated ? -0.62 : -0.65) + Math.sin(t * 10) * 0.04 * subtle;
-    rightElbow = (seated ? -0.62 : -0.65) + Math.cos(t * 9) * 0.04 * subtle;
-    leftSpread = 0.13; rightSpread = -0.13;
+    leftShoulder = rightShoulder = seated ? -0.9 : -0.67;
+    leftElbow = (seated ? -0.62 : -0.81) + Math.sin(t * 7.3) * 0.025 * subtle;
+    rightElbow = (seated ? -0.62 : -0.81) + Math.sin(t * 6.6 + 1.4) * 0.025 * subtle;
+    leftSpread = 0.085; rightSpread = -0.085;
   } else if (state === 'talk') {
-    leftShoulder = -0.3 + Math.sin(t * 2.7) * 0.12 * subtle;
-    rightShoulder = -0.4 + Math.cos(t * 2.3) * 0.16 * subtle;
-    leftElbow = -0.7 + Math.sin(t * 2) * 0.15 * subtle;
-    rightElbow = -0.9 + Math.cos(t * 2.6) * 0.22 * subtle;
-    leftSpread = 0.2; rightSpread = -0.18;
+    leftShoulder = -0.29 + Math.sin(t * 1.9) * 0.08 * subtle;
+    rightShoulder = -0.42 + Math.sin(t * 1.5 + 1.4) * 0.13 * subtle;
+    leftElbow = -0.78 + Math.sin(t * 1.4) * 0.12 * subtle;
+    rightElbow = -1 + Math.sin(t * 1.7) * 0.17 * subtle;
+    leftSpread = 0.16; rightSpread = -0.23;
   } else if (state === 'coffee' || state === 'eat') {
-    const raised = subtle === 0 || Math.sin(t * (state === 'eat' ? 1.2 : 0.8)) > 0.05;
-    rightShoulder = -0.6; rightElbow = raised ? -1.95 : -0.95;
-    leftShoulder = state === 'eat' ? -0.65 : seated ? -0.38 : 0.035;
-    leftElbow = state === 'eat' ? -0.95 : seated ? -0.7 : -0.08;
-    rightSpread = -0.08;
+    const drink = (Math.sin(t * (state === 'eat' ? 1.1 : 0.62)) + 1) / 2;
+    rightShoulder = -0.59 - drink * (state === 'coffee' ? 0.4 : 0.1) * subtle;
+    rightElbow = -0.91 - drink * 1.04 * subtle;
+    leftShoulder = state === 'eat' ? -0.7 : seated ? -0.32 : 0.02;
+    leftElbow = state === 'eat' ? -0.99 : seated ? -0.7 : -0.1;
+    rightSpread = -0.085;
   } else if (state === 'think') {
-    rightShoulder = -0.65; rightElbow = -1.85; rightSpread = 0.15;
-    leftShoulder = seated ? -0.4 : -0.05; leftElbow = seated ? -0.75 : -0.15;
+    rightShoulder = -0.62; rightElbow = -1.94; rightSpread = 0.18;
+    leftShoulder = seated ? -0.32 : -0.05; leftElbow = seated ? -0.7 : -0.16;
   } else if (state === 'read') {
-    leftShoulder = rightShoulder = -0.65;
-    leftElbow = rightElbow = -0.92;
-    leftSpread = 0.1; rightSpread = -0.1;
-  } else if (state === 'repair') {
-    leftShoulder = -0.65; leftElbow = -0.92;
-    rightShoulder = -0.74 + Math.sin(t * 2.2) * 0.035 * subtle;
-    rightElbow = -1.08 + Math.sin(t * 4) * 0.08 * subtle;
-    leftSpread = 0.11; rightSpread = -0.15;
-  } else if (state === 'inspect') {
-    leftShoulder = -0.65; leftElbow = -0.92;
-    rightShoulder = -0.5; rightElbow = -1.05 + Math.sin(t * 1.6) * 0.04 * subtle;
-    leftSpread = 0.1; rightSpread = -0.15;
+    leftShoulder = rightShoulder = -0.64; leftElbow = rightElbow = -1.05;
+    leftSpread = 0.12; rightSpread = -0.12;
+  } else if (state === 'repair' || state === 'inspect') {
+    leftShoulder = -0.67; leftElbow = -0.92;
+    rightShoulder = -0.74 + Math.sin(t * 1.8) * 0.035 * subtle;
+    rightElbow = -1.12 + Math.sin(t * 3.2) * 0.07 * subtle;
+    leftSpread = 0.1; rightSpread = -0.14;
   } else if (state === 'cook') {
-    leftShoulder = -0.72; leftElbow = -0.8; leftSpread = 0.08;
-    rightShoulder = -0.77 + Math.sin(t * 2.8) * 0.045 * subtle;
-    rightElbow = -0.8 + Math.cos(t * 2.8) * 0.08 * subtle;
-    rightSpread = -0.43 + Math.sin(t * 2.8) * 0.04 * subtle;
+    leftShoulder = -0.73; leftElbow = -0.82; leftSpread = 0.08;
+    rightShoulder = -0.75 + Math.sin(t * 2.2) * 0.04 * subtle;
+    rightElbow = -0.85 + Math.cos(t * 2.2) * 0.06 * subtle;
+    rightSpread = -0.35 + Math.sin(t * 2.2) * 0.04 * subtle;
   } else if (state === 'sign') {
-    leftShoulder = -0.82; leftElbow = -0.7; leftSpread = 0.12;
-    rightShoulder = -0.95; rightElbow = -0.62 + Math.sin(t * 4.8) * 0.045 * subtle; rightSpread = -0.12;
+    leftShoulder = -0.82; leftElbow = -0.7; leftSpread = 0.1;
+    rightShoulder = -0.9; rightElbow = -0.64 + Math.sin(t * 4) * 0.025 * subtle; rightSpread = -0.1;
   } else if (state === 'toilet' || seated) {
-    leftShoulder = rightShoulder = state === 'toilet' ? -0.26 : -0.4;
-    leftElbow = rightElbow = state === 'toilet' ? -0.75 : -0.65;
+    leftShoulder = rightShoulder = -0.32; leftElbow = rightElbow = -0.66;
   }
   if (state === 'wave') {
-    rightShoulder = -0.15; rightSpread = 2.05 + Math.sin(t * 7) * 0.16 * subtle; rightElbow = -0.35;
+    rightShoulder = -0.18; rightSpread = 2.18 + Math.sin(t * 4.4) * 0.11 * subtle; rightElbow = -0.34;
   }
   return { leftShoulder, rightShoulder, leftElbow, rightElbow, leftSpread, rightSpread };
 }
-function UpperArm({ color, skin }: { color: string; skin: string }) {
-  return <>
-    <mesh position={[0, -UPPER_ARM / 2, 0]} castShadow><capsuleGeometry args={[0.066, UPPER_ARM - 0.12, 4, 10]} /><meshStandardMaterial color={color} roughness={0.87} /></mesh>
-    <mesh position={[0, -UPPER_ARM, 0]}><sphereGeometry args={[0.056, 10, 8]} /><meshStandardMaterial color={skin} roughness={0.9} /></mesh>
-  </>;
+
+function Ball({ position, scale, mat, detail = false }: { position?: Vec3; scale: Vec3; mat: THREE.Material; detail?: boolean }) {
+  return <mesh geometry={detail ? SHAPES.detail : SHAPES.sphere} material={mat} position={position} scale={scale} castShadow={Math.max(...scale) > 0.045} />;
 }
-function Forearm({ color, skin }: { color: string; skin: string }) {
-  return <>
-    <mesh position={[0, -FOREARM / 2 + 0.015, 0]} castShadow><capsuleGeometry args={[0.052, FOREARM - 0.11, 4, 10]} /><meshStandardMaterial color={color} roughness={0.87} /></mesh>
-    <mesh position={[0, -FOREARM + 0.04, 0]}><cylinderGeometry args={[0.052, 0.047, 0.032, 10]} /><meshStandardMaterial color="#eee8dc" roughness={0.9} /></mesh>
-    <mesh position={[0, -FOREARM - 0.018, 0]} scale={[0.8, 1.14, 0.7]} castShadow><sphereGeometry args={[0.055, 10, 8]} /><meshStandardMaterial color={skin} roughness={0.88} /></mesh>
-    {[0, 1, 2].map(finger => <mesh key={finger} position={[(finger - 1) * 0.024, -FOREARM - 0.058, 0.011]}><capsuleGeometry args={[0.011, 0.025, 2, 6]} /><meshStandardMaterial color={skin} roughness={0.88} /></mesh>)}
-  </>;
+function SoftBox({ position, scale, rotation, mat }: { position?: Vec3; scale: Vec3; rotation?: Vec3; mat: THREE.Material }) {
+  return <mesh geometry={SHAPES.box} material={mat} position={position} scale={scale} rotation={rotation} castShadow={Math.max(...scale) > 0.11} />;
 }
-function Hair({ hair, variant }: { hair: string; variant: number }) {
-  const longHair = variant === 2 || variant === 6, bob = variant === 1;
+function Limb({ position, radius, length, mat }: { position: Vec3; radius: number; length: number; mat: THREE.Material }) {
+  return <mesh geometry={SHAPES.limb} material={mat} position={position} scale={[radius, length + 0.024, radius]} castShadow />;
+}
+function Hand({ mat, side }: { mat: THREE.Material; side: -1 | 1 }) {
+  return <group position={[0, -FOREARM - 0.024, 0.004]}>
+    <SoftBox scale={[0.07, 0.075, 0.039]} mat={mat} />
+    <Ball position={[-side * 0.039, 0.009, 0.009]} scale={[0.018, 0.032, 0.02]} mat={mat} detail />
+    {[0, 1, 2].map(finger => <Ball key={finger} position={[(finger - 1) * 0.022, -0.034, 0.007]} scale={[0.012, 0.022, 0.016]} mat={mat} detail />)}
+  </group>;
+}
+function Hair({ mat, accent, variant, ponytail }: { mat: THREE.Material; accent: THREE.Material; variant: number; ponytail: RefObject<THREE.Group | null> }) {
   return <>
-    <mesh position={[0, 0.07, -0.021]} scale={[0.97, 1, 0.98]} castShadow><sphereGeometry args={[0.198, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.57]} /><meshStandardMaterial color={hair} roughness={0.96} /></mesh>
-    <mesh position={[-0.059, 0.11, 0.115]} rotation={[0.06, 0, -0.26]} scale={[1.65, 0.5, 0.6]} castShadow><sphereGeometry args={[0.085, 12, 8]} /><meshStandardMaterial color={hair} roughness={0.96} /></mesh>
-    <mesh position={[0.078, 0.11, 0.11]} rotation={[0.08, 0, 0.3]} scale={[1.1, 0.45, 0.55]} castShadow><sphereGeometry args={[0.072, 12, 8]} /><meshStandardMaterial color={hair} roughness={0.96} /></mesh>
-    {(longHair || bob) && <>
-      <mesh position={[0, longHair ? -0.076 : -0.015, -0.095]} scale={[1.03, longHair ? 1.25 : 0.85, 0.69]} castShadow><sphereGeometry args={[0.177, 14, 12]} /><meshStandardMaterial color={hair} roughness={0.96} /></mesh>
-      {[-1, 1].map(side => <mesh key={side} position={[side * 0.166, longHair ? -0.025 : 0.005, -0.025]} scale={[0.46, longHair ? 1.75 : 1.1, 0.62]} castShadow><sphereGeometry args={[0.107, 12, 10]} /><meshStandardMaterial color={hair} roughness={0.96} /></mesh>)}
+    <mesh geometry={SHAPES.hairCap} material={mat} position={[0, 0.028, -0.014]} scale={[0.207, 0.208, 0.197]} castShadow />
+    {variant === 3 ? <>
+      {[[-0.11, 0.17, 0.01], [0, 0.205, 0.015], [0.11, 0.168, 0.02], [-0.068, 0.158, 0.126], [0.064, 0.163, 0.123]].map((position, i) => <Ball key={i} position={position as Vec3} scale={[0.081, 0.069, 0.069]} mat={mat} detail />)}
+    </> : <>
+      <group rotation={[0, 0, variant === 5 ? -0.2 : -0.14]}>
+        <Ball position={[-0.048, variant === 7 ? 0.182 : 0.139, 0.116]} scale={[0.129, variant === 5 ? 0.082 : 0.055, 0.071]} mat={mat} />
+        <Ball position={[0.082, 0.132, 0.112]} scale={[0.089, 0.043, 0.06]} mat={mat} />
+      </group>
     </>}
-    {variant === 2 && <mesh position={[0, -0.17, -0.215]} scale={[0.65, 1.4, 0.65]} castShadow><sphereGeometry args={[0.095, 12, 10]} /><meshStandardMaterial color={hair} roughness={0.96} /></mesh>}
-    {variant === 3 && [-1, 0, 1].map(i => <mesh key={i} position={[i * 0.09, 0.18, 0.004]} castShadow><sphereGeometry args={[0.065, 10, 8]} /><meshStandardMaterial color={hair} roughness={0.98} /></mesh>)}
-    {variant === 7 && <>
-      <mesh position={[-0.04, 0.18, 0.015]} rotation={[0.14, 0, -0.18]} scale={[1.45, 0.61, 0.9]} castShadow><sphereGeometry args={[0.093, 14, 10]} /><meshStandardMaterial color={hair} roughness={0.94} /></mesh>
-      <mesh position={[0.115, 0.091, 0.055]} rotation={[0, 0, 0.25]} scale={[0.6, 1.15, 0.45]} castShadow><sphereGeometry args={[0.075, 10, 8]} /><meshStandardMaterial color={hair} roughness={0.96} /></mesh>
+    {variant === 1 && <>
+      <Ball position={[0, -0.017, -0.088]} scale={[0.196, 0.2, 0.137]} mat={mat} />
+      {[-1, 1].map(side => <Ball key={side} position={[side * 0.171, side < 0 ? -0.037 : -0.014, -0.017]} scale={[0.062, side < 0 ? 0.157 : 0.135, 0.101]} mat={mat} />)}
     </>}
-    {variant === 8 && <mesh position={[0.06, 0.143, 0.031]} rotation={[0.05, 0, 0.2]} scale={[1.1, 0.48, 1.0]} castShadow><sphereGeometry args={[0.09, 12, 8]} /><meshStandardMaterial color={hair} roughness={0.96} /></mesh>}
+    {variant === 2 && <group ref={ponytail} position={[0, 0.055, -0.179]}>
+      <Ball position={[0, -0.131, -0.058]} scale={[0.064, 0.17, 0.067]} mat={mat} />
+      <SoftBox position={[0, -0.024, -0.001]} scale={[0.113, 0.019, 0.051]} mat={accent} />
+    </group>}
+    {variant === 6 && <>
+      <Ball position={[0, -0.072, -0.196]} scale={[0.09, 0.086, 0.071]} mat={mat} />
+      <Ball position={[0.052, -0.088, -0.224]} scale={[0.036, 0.015, 0.02]} mat={accent} detail />
+    </>}
+    {variant === 4 && [-1, 0, 1].map(i => <Ball key={i} position={[i * 0.066, 0.171, 0.034]} scale={[0.077, 0.061, 0.098]} mat={mat} detail />)}
+    {(variant === 0 || variant === 5 || variant === 7 || variant === 8) && [-1, 1].map(side => <Ball key={side} position={[side * 0.171, 0.066, -0.013]} scale={[0.035, 0.088, 0.067]} mat={mat} detail />)}
   </>;
 }
-function Glasses({ founder = false }: { founder?: boolean }) {
-  const frame = founder ? '#b69c6c' : '#526978';
-  return <group position={[0, 0.009, 0.192]}>
-    {[-0.068, 0.068].map(x => <mesh key={x} position={[x, 0, 0]} scale={[founder ? 1.15 : 1.12, founder ? 0.96 : 0.86, 1]}><torusGeometry args={[0.042, founder ? 0.0055 : 0.0045, 5, 14]} /><meshStandardMaterial color={frame} metalness={0.35} roughness={0.5} /></mesh>)}
-    <mesh><boxGeometry args={[0.046, 0.006, 0.008]} /><meshStandardMaterial color={frame} /></mesh>
-    {[-1, 1].map(side => <mesh key={side} position={[side * 0.131, 0, -0.041]} rotation={[0, side * 0.4, 0]}><boxGeometry args={[0.007, 0.006, 0.092]} /><meshStandardMaterial color={frame} /></mesh>)}
+function Glasses({ mat, founder }: { mat: THREE.Material; founder: boolean }) {
+  return <group position={[0, 0.018, 0.2]}>
+    {[-1, 1].map(side => <group key={side} position={[side * 0.067, 0, 0]}>
+      <mesh geometry={SHAPES.ring} material={mat} scale={[founder ? 0.046 : 0.045, founder ? 0.039 : 0.044, 0.035]} />
+      <SoftBox position={[side * 0.054, 0, -0.025]} scale={[0.008, 0.008, 0.085]} mat={mat} />
+    </group>)}
+    <SoftBox scale={[0.044, 0.007, 0.009]} mat={mat} />
   </group>;
 }
