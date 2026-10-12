@@ -1,0 +1,14 @@
+.character-editor { display: flex; flex-direction: column; gap: 10px; padding: 13px; border: 1px solid #d1e1ee; border-radius: 12px; background: #fff; }
+.character-editor form { display: flex; flex-direction: column; gap: 6px; }
+.studio-controls .character-editor label { display: flex; flex-direction: column; align-items: stretch; gap: 5px; font-size: 11px; }
+.studio-controls .character-editor .studio-toggle { flex-direction: row; align-items: center; }
+.character-name-field { display: flex; flex-direction: column; gap: 6px; }
+.character-editor input[type='text'], .character-name-field input, .character-editor select { width: 100%; min-width: 0; border: 1px solid #ccdce8; border-radius: 7px; background: #f6fafe; color: #29496c; padding: 8px; font: inherit; font-size: 12px; }
+.character-editor button { border: 1px solid #b7cede; border-radius: 8px; padding: 8px 10px; color: #315f8c; background: #eaf3fa; font: inherit; font-size: 11px; }
+.character-editor button:hover { background: #dcebf5; }
+.character-editor-selects { display: grid; gap: 9px; }
+.character-editor-colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.character-editor input[type='color'] { width: 100%; height: 30px; padding: 2px; border: 1px solid #d1e1ee; border-radius: 6px; cursor: pointer; background: #f5f9fc; }
+.character-editor-fixed { margin: 0; color: #677d93; font-size: 10px; line-height: 1.5; }
+.character-editor-status { min-height: 26px; color: #56758e; font-size: 10px; line-height: 1.5; }
+.character-editor :is(input,select,button):focus-visible { outline: 2px solid #497fb5; outline-offset: 2px; }

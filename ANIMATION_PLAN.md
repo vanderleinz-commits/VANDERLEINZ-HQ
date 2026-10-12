@@ -1,6 +1,6 @@
 # Blue and Space Headquarters — Animation Foundation
 
-Phase 01 menyatukan gerakan staf, tamu, dan avatar. Rig yang dipakai di kantor juga dipakai di Studio visual. Preview menguji wajah, siluet, duduk, serta keterbacaan pada jarak Director dan Avatar.
+Fondasi visual menyatukan gerakan sepuluh NPC, tamu, dan avatar pemilik. Rig yang dipakai di kantor juga dipakai di Studio visual. Preview menguji wajah, siluet, duduk, layanan kantor, serta keterbacaan pada jarak Director dan Avatar.
 
 ## Kontrak rig
 
@@ -10,7 +10,7 @@ Phase 01 menyatukan gerakan staf, tamu, dan avatar. Rig yang dipakai di kantor j
 - Titik pinggul duduk menggunakan **y = 0,64** pada koordinat lokal kursi. Furnitur dan animasi berbagi titik acuan.
 - Rambut, pakaian, kulit, serta aksesori memakai profil yang sama di kantor dan studio. Variasi siluet mempertahankan rangka dasar.
 
-Rig ini memakai geometri dan gerak sendi prosedural. Skeleton terikat mesh, clip GLB, motion capture, blend shape, serta inverse kinematics belum tersedia.
+Rig ini memakai geometri dan gerak sendi prosedural. Kontak tangan memakai solusi dua ruas pada bidang depan untuk mengetik, memegang tray, dan memakai HP. Sudut paha/lutut duduk dihitung dari tinggi pinggul serta panjang kaki. Skeleton terikat mesh, clip GLB, motion capture, serta blend shape belum tersedia.
 
 ## Bahasa gerak
 
@@ -27,7 +27,8 @@ Rotasi sendi dan perpindahan menuju duduk dibaurkan. Gerak visual berulang mengi
 | Talk | Rapat/percakapan | Gestur tangan dan anggukan bergantian |
 | Think | Mendengarkan/menunggu | Gestur reflektif dekat kepala |
 | Wave | Sapaan/dukungan | Tangan terangkat dengan ayunan terbatas |
-| Coffee | Minum | Cangkir mendekati wajah lalu kembali |
+| Coffee | Kopi yang disajikan | Cangkir mendekati wajah lalu kembali |
+| Water | Mengambil air minum | Gelas transparan berisi air; gerak teguk lembut |
 | Eat | Pantry | Mangkuk, sendok, perhatian ke makanan |
 | Read | Library/dokumen | Buku terbuka dan kepala menunduk |
 | Inspect | ATLAS memeriksa tim | Tablet dan orientasi ke meja rekan |
@@ -35,28 +36,43 @@ Rotasi sendi dan perpindahan menuju duduk dibaurkan. Gerak visual berulang mengi
 | Cook | Pantry | Panci dan gerak mengaduk |
 | Sign | Absensi/buku tamu | Pena dan menulis di depan tubuh |
 | Toilet | Ruangan privat | Pose netral; karakter disembunyikan sesuai kegiatan |
+| Carry | Yati membawa minuman | Langkah dengan dua tangan memegang tray dan cangkir |
+| Deliver | Yati melayani staf/tamu | Tray mendatar, jangkauan tangan pendek saat berhenti |
+| Brew | Yati menyiapkan kopi | Tangan menekan mesin di depan tubuh; tanpa cangkir minum di tangan |
+| Clean | Deno membersihkan area | Sapu bergerak perlahan dan kedua lengan mengikuti gestur |
+| Phone | Istirahat ringan | HP di depan tubuh, tangan mengetuk layar |
 
 ## Kontak furnitur dan pemicu
 
 `officeLayout.ts` menyediakan kursi kerja/rapat/makan/membaca dan titik layanan. Kegiatan mengikuti **perjalanan → tiba → aktivitas → kembali**; penghitung aktivitas dimulai setelah tiba. Pose mengacu pada arah furnitur, bukan arah kamera.
 
-Work di studio memasang kursi/meja untuk menguji tinggi pinggul, sudut paha/lutut, jangkauan tangan, dan orientasi layar. Cangkir, buku, serta alat mengikuti kelompok tangan. Kontak masih berupa posisi/rotasi yang dirancang; tangan belum mengunci keyboard dan kaki belum menapak setiap anak tangga.
+Work di studio memasang kursi/meja untuk menguji tinggi pinggul, sudut paha/lutut, jangkauan tangan, dan orientasi layar. Acuan tinggi tangan mengetik adalah 0,855 unit lokal. Solusi lengan mempertahankan siku dalam jangkauan yang wajar; gerak kecil jari tetap berupa gestur, tanpa IK tiap jari atau target keyboard per tombol.
+
+Saat duduk, tulang kering tetap vertikal dan telapak mencapai permukaan lantai. Kelompok sepatu melawan rotasi paha/lutut agar sol tetap rata. Koreksi tinggi pinggul mencegah telapak menembus lantai selama transisi. Saat berjalan, kaki memakai siklus prosedural; fase langkah belum dikunci ke jarak tempuh dunia. Elevasi tangga mengikuti jalur karakter secara halus, tanpa kontak IK terpisah pada setiap anak tangga.
+
+Cangkir, gelas, buku, dan alat kecil mengikuti kelompok tangan atau acuan tubuh. Tray Yati memakai acuan pegangan dua tangan yang sama; opsi `equipment='tray'` mempertahankan tray saat pose berubah dari Carry ke Stairs. Lutut tetap memakai gait tangga dan tray melawan roll tubuh agar tetap mendatar. Sapu Deno memakai poros dekat lantai. Saat berpindah area, Deno tetap memakai langkah Walk/Stairs dengan opsi `equipment='broom'`: satu tangan memegang sapu di samping tubuh dengan kepala sapu diangkat dari lantai. Saat berhenti membersihkan, pose Clean menurunkan sapu ke lantai. Pose Brew memakai acuan tangan sekitar y=1,06 dan z=0,4 untuk tombol mesin kopi.
+
+Prop belum memakai fisika, constraint rangka, atau animasi pemindahan cangkir dari tray ke meja. Cangkir meja baru ditampilkan oleh sistem layanan setelah pengantaran selesai.
 
 Percakapan dan rapat memakai giliran bicara. Amanda melayani dari belakang meja. Simulasi memilih kegiatan; rig menerima pose, duduk, ekspresi, kecepatan visual, serta pengurangan animasi, lalu mengatur presentasi.
 
 ## Validasi visual
 
-1. Bandingkan delapan siluet pada kamera Miniature/Third person: tinggi, kepala, bahu, serta pakaian.
+1. Bandingkan sepuluh siluet pada kamera Miniature/Third person: tinggi, kepala, bahu, serta pakaian. Avatar dan tiga profil tamu dapat dipilih tersendiri.
 2. Orbit dari depan, sisi, dan belakang; periksa anggota tubuh dan aksesori.
 3. Putar Walk/Stairs; periksa langkah dari jauh/dekat.
-4. Uji Work/Talk/Read/Eat/Coffee saat duduk: pinggul, paha, lutut, alas kaki, prop, serta posisi meja.
+4. Uji Work/Talk/Read/Eat/Coffee/Water/Phone saat duduk: pinggul, paha, lutut, alas kaki, prop, serta posisi meja.
 5. Ganti tiga ekspresi pada Face detail; periksa mata/alis dan benturan permukaan.
-6. Matikan animasi, tutup studio, dan periksa waktu kantor kembali ke laju sebelumnya.
+6. Uji Carry/Deliver/Clean/Brew saat berdiri; periksa tray, cangkir, sapu, dan kontak pegangan. Pilih Deno atau Yati pada Walk/Stairs untuk melihat sapu/tray saat perjalanan. Studio membatasi pose layanan ini agar tidak dipasang pada kursi.
+7. Ubah nama, rambut, wajah, warna, pakaian, dan kacamata; periksa hasil yang sama di kantor setelah menutup studio. Muat ulang untuk memeriksa penyimpanan lokal dan pulihkan satu karakter.
+8. Matikan animasi, tutup studio, dan periksa waktu kantor kembali ke laju sebelumnya.
 
 Hasil perlu dilihat kembali di kantor karena kamera, cahaya, dan furnitur memengaruhi keterbacaan. Checklist ada di [QA.md](QA.md).
 
-Furnitur, staf, client, dan avatar memakai elevasi permukaan lantai yang sama. Tamu memperbarui posisi vertikal serta pose tangga saat berpindah lantai. Founder dan ATLAS memakai dua titik sofa berbeda; tamu, ATLAS, dan Founder memakai kursi berbeda pada ruang client. Pantry memisahkan tujuh kursi staf dan satu kursi pemilik. Felin tetap di kursi lawan bicara selama konsultasi avatar berlangsung.
+Furnitur, staf, client, dan avatar memakai elevasi permukaan lantai yang sama. Tamu memperbarui posisi vertikal serta pose tangga saat berpindah lantai. Founder dan ATLAS memakai dua titik sofa berbeda; tamu, ATLAS, Founder, dan tim pendamping memakai kursi berbeda pada ruang client. Pantry menyediakan sembilan kursi staf dan satu kursi pemilik; sebagian kegiatan istirahat memakai kursi kerja, library, dan lounge resepsionis. Felin tetap di kursi lawan bicara selama konsultasi avatar berlangsung.
 
 Kamera avatar mempertahankan satu arah pandang dan meredam target, tinggi, serta jarak secara terpisah. Benturan kamera hanya membaca arsitektur, sehingga monitor dan furnitur kecil tidak menyebabkan perubahan sudut berulang. Kontrol jalan mempertahankan arah walaupun jarak kamera berubah.
 
-Fondasi dapat diganti dengan mesh berbobot/skeletal clips dengan mempertahankan kontrak proporsi, profil, arah hadap, pose, serta titik kursi. Pengembangan IK dan penghindaran kerumunan masih belum tersedia.
+Fondasi dapat diganti dengan mesh berbobot/skeletal clips dengan mempertahankan kontrak proporsi, profil, arah hadap, pose, serta titik kursi. Koreksi kerumunan dan antrean dikerjakan pada simulasi/jalur; rig mengurus pose visual. Kontak dua ruas saat ini tidak mencakup IK medan penuh, penguncian kaki berjalan, atau resolusi benturan setiap anggota tubuh.
+
+Tes kontak geometri dan penyimpanan penampilan ada pada `tests/characterCustomization.test.ts`. Tes matematis tidak menggantikan pemeriksaan visual pada setiap furnitur dan perangkat.

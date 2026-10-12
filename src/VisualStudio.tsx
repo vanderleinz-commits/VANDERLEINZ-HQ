@@ -4,7 +4,9 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { CharacterRig } from './CharacterRig';
 import type { CharacterExpression, Pose } from './CharacterRig';
-import { characterProfiles } from './characterProfiles';
+import { characterProfiles, EMPLOYEE_PROFILE_COUNT, OWNER_PROFILE_INDEX } from './characterProfiles';
+import { useCharacterRevision } from './useCharacterRevision';
+import { CharacterEditor } from './CharacterEditor';
 import { OfficeChair, OfficePlant, ComputerDesk } from './OfficeArchitecture';
 import { BRAND, CHARACTER_STANDARD, GRAPHICS, PALETTE } from './artDirection';
 import type { GraphicsQuality } from './artDirection';
@@ -15,15 +17,20 @@ const POSES: { pose: Pose; label: string }[] = [
   { pose: 'idle', label: 'Berdiri' }, { pose: 'walk', label: 'Berjalan' },
   { pose: 'wave', label: 'Menyapa' }, { pose: 'talk', label: 'Berdiskusi' },
   { pose: 'work', label: 'Bekerja' }, { pose: 'coffee', label: 'Minum' },
+  { pose: 'water', label: 'Minum air' },
   { pose: 'read', label: 'Membaca' }, { pose: 'eat', label: 'Makan' },
   { pose: 'stairs', label: 'Tangga' }, { pose: 'repair', label: 'Perbaikan' },
   { pose: 'sign', label: 'Absensi' }, { pose: 'cook', label: 'Memasak' },
+  { pose: 'carry', label: 'Membawa minuman' }, { pose: 'deliver', label: 'Mengantar minuman' },
+  { pose: 'brew', label: 'Menyiapkan kopi' },
+  { pose: 'clean', label: 'Menyapu' }, { pose: 'phone', label: 'Bermain HP' },
 ];
 const COLORS = [PALETTE.midnight, PALETTE.corporate, PALETTE.sky, PALETTE.cloud, PALETTE.sand, PALETTE.lavender, PALETTE.teal];
 
 export default function VisualStudio({ quality, reducedMotion, onClose }: {
   quality: GraphicsQuality; reducedMotion: boolean; onClose: () => void;
 }) {
+  useCharacterRevision();
   const [selected, setSelected] = useState(1);
   const [pose, setPose] = useState<Pose>('idle');
   const [expression, setExpression] = useState<CharacterExpression>('neutral');
@@ -35,6 +42,7 @@ export default function VisualStudio({ quality, reducedMotion, onClose }: {
   const dialog = useRef<HTMLDivElement>(null);
   const close = useRef(onClose); close.current = onClose;
   const profile = characterProfiles[selected];
+  const poseCanSit = !['walk','stairs','carry','deliver','clean','brew'].includes(pose);
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null;
     const modal = dialog.current;
@@ -52,26 +60,27 @@ export default function VisualStudio({ quality, reducedMotion, onClose }: {
   }, []);
   const choosePose = (next: Pose) => {
     setPose(next);
-    setSeated(['work', 'read', 'eat', 'coffee', 'talk'].includes(next));
+    setSeated(['work', 'read', 'eat', 'coffee', 'water', 'phone', 'talk'].includes(next));
   };
   return <div className="visual-studio" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="studio-title">
     <header className="studio-heading">
-      <div><span className="eyebrow">{BRAND.shortName} · Phase 01</span><h2 id="studio-title">Studio visual</h2><p>Kenali wajah, gerakan, dan cerita kecil tim kita.</p></div>
+      <div><span className="eyebrow">{BRAND.shortName}</span><h2 id="studio-title">Studio visual</h2><p>Ubah nama dan penampilan karakter, lalu lihat gerakannya.</p></div>
       <button onClick={onClose} aria-label="Close visual studio">×</button>
     </header>
     <div className="studio-layout">
       <aside className="studio-controls">
         <div className="eyebrow">PEOPLE OF BLUE AND SPACE</div>
         <div className="studio-character-list" role="group" aria-label="Preview character">
-          {characterProfiles.slice(0, 8).map((person, i) => <button key={person.name} aria-pressed={selected === i} onClick={() => { setSelected(i); setLineup(false); }}><span style={{ background: person.color }} aria-hidden="true" />{person.name}</button>)}
+          {characterProfiles.map((person, i) => <button key={i} aria-pressed={selected === i} onClick={() => { setSelected(i); setLineup(false); }}><span style={{ background: person.color }} aria-hidden="true" />{person.name}{i === OWNER_PROFILE_INDEX ? ' · Avatar' : ''}</button>)}
         </div>
-        <div className="studio-note"><strong>{profile.name} · {profile.role}</strong><p>{profile.silhouette}</p><small>{profile.personality}</small></div>
+        <div className="studio-note"><strong>{profile.name} · {profile.role}</strong><p>Sesuaikan penampilannya di bawah.</p><small>{profile.personality}</small></div>
+        <CharacterEditor index={selected} />
         <div className="eyebrow">GERAKAN</div>
         <div className="studio-pose-list" role="group" aria-label="Animation pose">{POSES.map(item => <button key={item.pose} aria-pressed={pose === item.pose} onClick={() => choosePose(item.pose)}>{item.label}</button>)}</div>
         <div className="eyebrow">EKSPRESI</div>
         <div className="studio-expression-list" role="group" aria-label="Facial expression">{([['neutral','Tenang'],['happy','Senang'],['focused','Fokus']] as const).map(([value,label]) => <button key={value} aria-pressed={expression === value} onClick={() => setExpression(value)}>{label}</button>)}</div>
-        <label className="studio-toggle"><input type="checkbox" checked={seated && !lineup} disabled={lineup || ['walk','stairs'].includes(pose)} onChange={event => setSeated(event.target.checked)} /> Duduk di kursi kantor</label>
-        <label className="studio-toggle"><input type="checkbox" checked={lineup} onChange={event => { setLineup(event.target.checked); setCamera('director'); }} /> Bandingkan delapan siluet</label>
+        <label className="studio-toggle"><input type="checkbox" checked={seated && !lineup && poseCanSit} disabled={lineup || !poseCanSit} onChange={event => setSeated(event.target.checked)} /> Duduk di kursi kantor</label>
+        <label className="studio-toggle"><input type="checkbox" checked={lineup} onChange={event => { setLineup(event.target.checked); setCamera('director'); }} /> Bandingkan sepuluh siluet tim</label>
         <label className="studio-toggle"><input type="checkbox" checked={playing} onChange={event => setPlaying(event.target.checked)} /> Putar animasi</label>
         <div className="studio-swatch" aria-label="Official color palette">{COLORS.map(color => <span key={color} style={{ backgroundColor: color }} title={color} />)}</div>
       </aside>
@@ -83,16 +92,16 @@ export default function VisualStudio({ quality, reducedMotion, onClose }: {
           <directionalLight castShadow position={[-3, 6, 5]} intensity={2.3} color="#FFF1D9" shadow-mapSize-width={GRAPHICS[quality].shadowMap} shadow-mapSize-height={GRAPHICS[quality].shadowMap} shadow-camera-left={-6} shadow-camera-right={6} shadow-camera-top={5} shadow-camera-bottom={-5} shadow-normalBias={.015} shadow-bias={-.0001} />
           <directionalLight position={[4, 3, -2]} intensity={.5} color={PALETTE.sky} />
           <StudioStage />
-          {lineup ? characterProfiles.slice(0,8).map((person,i) => <group key={person.name} position={[(i - 3.5) * .96, 0, 0]}><CharacterRig key={`${pose}-${expression}`} color={person.color} hair={person.hair} variant={i} pose={pose} expression={expression} speed={playing ? 1 : 0} reducedMotion={reducedMotion} /></group>) : <>
-            {seated && !['walk','stairs'].includes(pose) && <OfficeChair position={[0,0,0]} rotation={0} color={PALETTE.corporate} />}
-            {seated && pose === 'work' && <ComputerDesk position={[0,.7,0]} rotation={Math.PI} variant={selected} />}
-            <CharacterRig key={`${selected}-${pose}-${seated}-${expression}`} color={profile.color} hair={profile.hair} variant={selected} pose={pose} expression={expression} seated={seated && !['walk','stairs'].includes(pose)} speed={playing ? 1 : 0} reducedMotion={reducedMotion} />
+          {lineup ? characterProfiles.slice(0,EMPLOYEE_PROFILE_COUNT).map((person,i) => <group key={i} position={[(i - 4.5) * .96, 0, 0]}><CharacterRig key={`${pose}-${expression}`} color={person.color} hair={person.hair} variant={i} pose={pose} expression={expression} equipment={['walk','stairs'].includes(pose) ? i === 9 ? 'broom' : i === 8 ? 'tray' : undefined : undefined} speed={playing ? 1 : 0} reducedMotion={reducedMotion} /></group>) : <>
+            {seated && poseCanSit && <OfficeChair position={[0,0,0]} rotation={0} color={PALETTE.corporate} />}
+            {seated && pose === 'work' && <ComputerDesk position={[0,.7]} rotation={Math.PI} variant={selected} />}
+            <CharacterRig key={`${selected}-${pose}-${seated}-${expression}`} color={profile.color} hair={profile.hair} variant={selected} pose={pose} expression={expression} seated={seated && poseCanSit} equipment={['walk','stairs'].includes(pose) ? selected === 9 ? 'broom' : selected === 8 ? 'tray' : undefined : undefined} speed={playing ? 1 : 0} reducedMotion={reducedMotion} />
           </>}
           <StudioCamera view={camera} lineup={lineup} />
           <FrameMetrics onUpdate={setMetrics} />
         </Canvas>
         <div className="studio-camera-list" role="group" aria-label="Preview camera">{([['director','Miniature'],['portrait','Third person'],['detail','Face detail']] as const).map(([view,label]) => <button key={view} aria-pressed={camera === view} disabled={lineup && view === 'detail'} onClick={() => setCamera(view)}>{label}</button>)}</div>
-        <div className="studio-stage-caption">{lineup ? 'Satu keluarga visual · delapan kepribadian' : profile.name}<small>Drag untuk orbit · scroll untuk zoom</small></div>
+        <div className="studio-stage-caption">{lineup ? 'Satu keluarga visual · sepuluh kepribadian' : profile.name}<small>Drag untuk orbit · scroll untuk zoom</small></div>
       </section>
     </div>
     <footer className="studio-footer"><span>{CHARACTER_STANDARD.headsTall} heads · soft silhouettes · warm materials</span><span>{metrics ? `${metrics.fps} FPS · ${metrics.calls} draws · ${(metrics.triangles/1000).toFixed(0)}k triangles` : 'Menyiapkan preview…'} · {quality}</span><small>Waktu kantor berhenti selama studio dibuka.</small></footer>
@@ -114,7 +123,7 @@ function StudioCamera({ view, lineup }: { view: CameraView; lineup: boolean }) {
   const moving = useRef(true);
   const { camera } = useThree();
   const [position,target] = useMemo(() => {
-    if (lineup) return [new THREE.Vector3(view === 'portrait' ? 0 : 5.3, view === 'portrait' ? 2.1 : 5.1, 11),new THREE.Vector3(0,.75,0)];
+    if (lineup) return [new THREE.Vector3(view === 'portrait' ? 0 : 5.8, view === 'portrait' ? 2.1 : 5.4, 14.5),new THREE.Vector3(0,.75,0)];
     if (view === 'detail') return [new THREE.Vector3(.32,1.55,1.65),new THREE.Vector3(0,1.36,0)];
     if (view === 'director') return [new THREE.Vector3(3.8,4.2,5.8),new THREE.Vector3(0,.65,0)];
     return [new THREE.Vector3(1.8,1.7,3.9),new THREE.Vector3(0,.85,0)];

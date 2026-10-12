@@ -68,8 +68,8 @@ test('work earns virtual credits and a manual break restores needs after arrivin
   assert.ok(after.credits > before.credits);
   assert.ok(after.npcs[0].energy < before.npcs[0].energy);
   let resting = assignActivity(after, 0, 'break');
-  resting = advance(resting, 55);
-  assert.equal(roomAt(resting.npcs[0].position), 5);
+  resting = advance(resting, 65);
+  assert.ok(resting.npcs[0].breakPlan);assert.equal(roomAt(resting.npcs[0].position),roomAt(activityGoal(resting,0)));
   assert.ok(resting.npcs[0].energy > after.npcs[0].energy);
   assert.equal(resting.npcs[0].activity, 'lunch', 'The official lunch hour takes precedence over a personal order');
 });
@@ -85,7 +85,7 @@ test('legacy saves migrate and malformed saves recover without invalid scene dat
   assert.equal(legacy.simulation.gameDay, 4); assert.equal(legacy.simulation.credits, 2000); assert.equal(legacy.roomId, 6);
   for (const json of ['{broken', 'null', '[]', '{"roomId":99,"gameMinute":-1}', '{"version":2,"simulation":{"npcs":[null]}}']) {
     const save = parseSave(json);
-    assert.equal(save.version, 5); assert.equal(save.simulation.npcs.length, 8);
+  assert.equal(save.version, 5); assert.equal(save.simulation.npcs.length, 10);
     assert.ok(save.roomId < 11); assert.ok(isWalkable(save.avatar));
   }
 });

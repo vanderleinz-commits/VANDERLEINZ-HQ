@@ -1,12 +1,12 @@
-import { rooms, FLOOR_HEIGHT } from './worldData.ts';
+import { rooms, FLOOR_HEIGHT, WORLD_BOUNDS } from './worldData.ts';
 import { furnitureFootprints, roomLocal, meetingSeat, lunchSeat, ENTRY_POINT, INTERIOR_DOOR_WIDTH, MAIN_DOOR_WIDTH, STAIR_X, STAIR_WIDTH, STAIR_BOTTOM, STAIR_TOP } from './officeLayout.ts';
 
 export type Point = [number, number, number?];
 type Rect = { x: number; z: number; w: number; d: number; floor: 0 | 1 };
-export const ROOM_DEPTH = 4.8;
-export const ROOM_WIDTH = 4.8;
+export const ROOM_DEPTH = 6.24;
+export const ROOM_WIDTH = 6.24;
 const radius = .25, step = .2;
-const minX = -12.1, minZ = -5.6, columns = 122, rows = 71;
+const minX = WORLD_BOUNDS.minX, minZ = -7.4, columns = 167, rows = 93;
 const obstacles: Rect[] = [...furnitureFootprints];
 const add = (x: number, z: number, w: number, d: number, floor: 0 | 1) => obstacles.push({ x, z, w, d, floor });
 export const elevation = (point: Point) => point[2] ?? 0;
@@ -37,37 +37,40 @@ export function isWalkable(point: Point): boolean {
   const floor = floorOf(point);
   if (Math.abs(y - floor * FLOOR_HEIGHT) > .025) return false;
   if (floor === 0) {
-    if (x < -12.1 || x > 12.1 || z < -5.6 || z > 8.4) return false;
-    if (z > 6.1 && Math.abs(x - ENTRY_POINT[0]) > 2.45) return false;
+    if (x < WORLD_BOUNDS.minX || x > WORLD_BOUNDS.maxX || z < WORLD_BOUNDS.minZ || z > WORLD_BOUNDS.outsideMaxZ) return false;
+    if (z > WORLD_BOUNDS.maxZ && Math.abs(x - ENTRY_POINT[0]) > 2.8) return false;
     if (Math.abs(x - STAIR_X) < STAIR_WIDTH / 2 + radius && z > STAIR_TOP[1] && z < STAIR_BOTTOM[1] - .00001) return false;
   } else {
-    if (x < -12.1 || x > 12.1 || z < -5.6 || z > .8) return false;
+    if (x < WORLD_BOUNDS.minX || x > WORLD_BOUNDS.upperMaxX || z < WORLD_BOUNDS.minZ || z > WORLD_BOUNDS.upperMaxZ) return false;
     if (Math.abs(x - STAIR_X) < STAIR_WIDTH / 2 + radius && z > STAIR_TOP[1] + .00001) return false;
   }
   return !obstacles.some((o) => o.floor === floor && Math.abs(x - o.x) < o.w / 2 + radius && Math.abs(z - o.z) < o.d / 2 + radius);
 }
 const pointAt = (index: number, floor: 0 | 1): Point => [minX + (index % columns) * step, minZ + Math.floor(index / columns) * step, floor * FLOOR_HEIGHT];
 const free = ([0, 1] as const).map((floor) => Array.from({ length: columns * rows }, (_, index) => isWalkable(pointAt(index, floor))));
-function segmentWalkable(a: Point, b: Point): boolean {
+const PERSON_CLEARANCE = .52;
+function segmentWalkable(a: Point, b: Point, occupied: Point[] = []): boolean {
   const count = Math.max(1, Math.ceil(pointDistance(a, b) / .06));
+  const clearances = occupied.map(point => Math.min(PERSON_CLEARANCE, pointDistance(a, point)));
   for (let index = 1; index <= count; index++) {
     const t = index / count;
-    if (!isWalkable([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, elevation(a) + (elevation(b) - elevation(a)) * t])) return false;
+    const point: Point = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, elevation(a) + (elevation(b) - elevation(a)) * t];
+    if (!isWalkable(point) || occupied.some((other, i) => pointDistance(point, other) < clearances[i] - .00001)) return false;
   }
   return true;
 }
-function nearestIndex(point: Point, floor: 0 | 1): number {
+function nearestIndex(point: Point, floor: 0 | 1, available = free[floor], occupied: Point[] = []): number {
   let best = 0, distance = Infinity;
   const requireConnection = isWalkable(point) && Math.abs(elevation(point) - floor * FLOOR_HEIGHT) < .025;
   const gx = Math.round((point[0] - minX) / step), gz = Math.round((point[1] - minZ) / step);
   const nearby = [-1, 0, 1].flatMap(dx => [-1, 0, 1].map(dz => [gx + dx, gz + dz])).filter(([x, z]) => x >= 0 && x < columns && z >= 0 && z < rows)
     .map(([x, z]) => z * columns + x).sort((a, b) => pointDistance(point, pointAt(a, floor)) - pointDistance(point, pointAt(b, floor)));
-  for (const index of nearby) if (free[floor][index] && (!requireConnection || segmentWalkable(point, pointAt(index, floor)))) return index;
-  for (let index = 0; index < free[floor].length; index++) {
-    if (!free[floor][index]) continue;
+  for (const index of nearby) if (available[index] && (!requireConnection || segmentWalkable(point, pointAt(index, floor), occupied))) return index;
+  for (let index = 0; index < available.length; index++) {
+    if (!available[index]) continue;
     const candidate = pointAt(index, floor);
     const d = (candidate[0] - point[0]) ** 2 + (candidate[1] - point[1]) ** 2;
-    if (d < distance && (!requireConnection || segmentWalkable(point, candidate))) { best = index; distance = d; }
+    if (d < distance && (!requireConnection || segmentWalkable(point, candidate, occupied))) { best = index; distance = d; }
   }
   return best;
 }
@@ -78,20 +81,25 @@ export function roomAt(point: Point): number | null {
 }
 export function station(roomId: number, index: number): Point {
   if (roomId === 2) return meetingSeat(index % 7).position;
-  if (roomId === 5) return lunchSeat(index % 7).position;
+  if (roomId === 5) return lunchSeat(index % 10).position;
   const room = rooms[roomId];
   return nearestWalkable(roomLocal(roomId, [-Math.min(1.25, room.width / 2 - .5), 0, Math.min(1.25, room.width / 2 - .5)][index % 3], index < 3 ? 1.7 : .9));
 }
-function floorPath(from: Point, to: Point, floor: 0 | 1): Point[] {
+function floorPath(from: Point, to: Point, floor: 0 | 1, occupied: Point[] = []): Point[] {
   if (pointDistance(from, to) < .00001) return [];
-  if (isWalkable(from) && segmentWalkable(from, to)) return [[...to]];
-  const start = nearestIndex(from, floor), goal = nearestIndex(to, floor);
+  const blockers = occupied.filter(point => floorOf(point) === floor && !onStairs(point) && pointDistance(from, point) > .08);
+  if (blockers.some(point => pointDistance(to, point) < PERSON_CLEARANCE)) return [];
+  if (isWalkable(from) && segmentWalkable(from, to, blockers)) return [[...to]];
+  // A small margin keeps adjacent grid edges outside the occupied circles as well.
+  const available = blockers.length ? free[floor].map((walkable, index) => walkable && !blockers.some(point => pointDistance(pointAt(index, floor), point) < PERSON_CLEARANCE + .015)) : free[floor];
+  const start = nearestIndex(from, floor, available, blockers), goal = nearestIndex(to, floor, available, blockers);
+  if (!available[start] || !available[goal]) return [];
   const previous = new Int32Array(free[floor].length).fill(-1), queue = [start];
   previous[start] = start;
   for (let head = 0; head < queue.length && previous[goal] === -1; head++) {
     const current = queue[head];
     for (const next of [current - 1, current + 1, current - columns, current + columns]) {
-      if (next < 0 || next >= free[floor].length || !free[floor][next] || previous[next] !== -1) continue;
+      if (next < 0 || next >= available.length || !available[next] || previous[next] !== -1) continue;
       if (Math.abs(next - current) === 1 && Math.floor(next / columns) !== Math.floor(current / columns)) continue;
       previous[next] = current; queue.push(next);
     }
@@ -114,7 +122,7 @@ function floorPath(from: Point, to: Point, floor: 0 | 1): Point[] {
   let cursor = from, next = 0;
   while (next < corners.length) {
     let farthest = next;
-    for (let candidate = corners.length - 1; candidate > next; candidate--) if (segmentWalkable(cursor, corners[candidate])) { farthest = candidate; break; }
+    for (let candidate = corners.length - 1; candidate > next; candidate--) if (segmentWalkable(cursor, corners[candidate], blockers)) { farthest = candidate; break; }
     smooth.push(corners[farthest]); cursor = corners[farthest]; next = farthest + 1;
   }
   return smooth;
@@ -127,22 +135,24 @@ function stairPath(from: Point, to: Point): Point[] {
   });
 }
 const rampInterior = (point: Point) => onStairs(point) && elevation(point) > .025 && elevation(point) < FLOOR_HEIGHT - .025;
-export function findPath(from: Point, to: Point): Point[] {
+export function findPath(from: Point, to: Point, occupied: Point[] = []): Point[] {
   if (!isWalkable(to)) return [];
   if (pointDistance(from, to) < .00001) return [];
   if (rampInterior(from) && rampInterior(to)) return stairPath(from, to);
   if (rampInterior(from)) {
     const landing = floorOf(to) === 1 ? STAIR_TOP : STAIR_BOTTOM;
-    return [...stairPath(from, landing), ...floorPath(landing, to, floorOf(to))];
+    const after = floorPath(landing, to, floorOf(to), occupied);
+    return after.length || pointDistance(landing, to) < .01 ? [...stairPath(from, landing), ...after] : [];
   }
   if (rampInterior(to)) {
     const landing = floorOf(from) === 1 ? STAIR_TOP : STAIR_BOTTOM;
-    return [...floorPath(from, landing, floorOf(from)), ...stairPath(landing, to)];
+    const before = floorPath(from, landing, floorOf(from), occupied);
+    return before.length || pointDistance(from, landing) < .01 ? [...before, ...stairPath(landing, to)] : [];
   }
   const fromFloor = floorOf(from), toFloor = floorOf(to);
-  if (fromFloor === toFloor) return floorPath(from, to, fromFloor);
+  if (fromFloor === toFloor) return floorPath(from, to, fromFloor, occupied);
   const entrance = fromFloor === 0 ? STAIR_BOTTOM : STAIR_TOP, exit = fromFloor === 0 ? STAIR_TOP : STAIR_BOTTOM;
-  const before = floorPath(from, entrance, fromFloor), after = floorPath(exit, to, toFloor);
+  const before = floorPath(from, entrance, fromFloor, occupied), after = floorPath(exit, to, toFloor, occupied);
   if ((!before.length && pointDistance(from, entrance) > .01) || (!after.length && pointDistance(exit, to) > .01)) return [];
   return [...before, ...stairPath(entrance, exit), ...after];
 }

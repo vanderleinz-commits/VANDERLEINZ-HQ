@@ -78,7 +78,7 @@ test('reading waits for a real library seat, completes after its seated duration
     if (duty?.phase === 'travel') assert.equal(duty.elapsed, 0);
     if (duty?.phase === 'active' && arrivedAt < 0) {
       arrivedAt = absoluteMinute(sim);
-      assert.ok(pointDistance(sim.npcs[3].position, librarySeat(3).position) < .15);
+      assert.ok(pointDistance(sim.npcs[3].position, librarySeat(1).position) < .15);
       assert.ok(seatedAt(sim, 3));
     }
     if (sim.completedDuties.read > 0) { completedAt = absoluteMinute(sim); break; }
@@ -107,7 +107,7 @@ test('a client is served at the desk, climbs upstairs and waits until the owner 
   assert.equal(sim.reception.log.filter(entry=>entry.kind==='client'&&entry.name===name).length,1);
   assert.equal(joinClientMeeting(sim,client.id),sim,'Director mode cannot service the owner client');
   sim.hqPoints=70;sim=setOwnerRoom(setOwnerEngagement(sim,true,'client'),11);
-  sim=joinClientMeeting(sim,client.id);sim=advance(sim,70);
+  sim=joinClientMeeting(sim,client.id);sim=advance(sim,120);
   assert.equal(sim.clients[0].phase,'offsite');assert.equal(sim.hqPoints,78);
 });
 

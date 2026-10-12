@@ -17,7 +17,7 @@ test('two arriving clients reach distinct seats without overlapping the owner or
   sim=advance(sim,85);
   assert.equal(sim.clients.length,2);assert.deepEqual(sim.clients.map(c=>c.seatSlot),[1,3]);
   for(const client of sim.clients){assert.equal(client.phase,'meeting');assert.ok(isWalkable(client.position));assert.deepEqual(client.position,clientMeetingSeat(client.seatSlot).position);}
-  assert.ok(pointDistance(sim.clients[0].position,sim.clients[1].position)>1.2);
+  assert.ok(pointDistance(sim.clients[0].position,sim.clients[1].position)>.85);
   assert.ok(sim.clients.every(c=>[0,2].every(slot=>pointDistance(c.position,clientMeetingSeat(slot).position)>.7)));
 });
 

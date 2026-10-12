@@ -21,22 +21,25 @@ export function initialBonds():Record<string,number> {
 export const encounterFor=(s:Simulation,index:number)=>s.encounters.find(e=>e.participants.includes(index));
 export const interactionGoal=(e:Encounter,index:number):Point=>(e.roomId===2?meetingSeat:lunchSeat)(e.chairs[e.participants[0]===index?0:1]).position;
 const dailyMeetingActive=(s:Simulation)=>['gathering','discussing'].includes(s.meeting.phase);
-const available=(s:Simulation,i:number)=>STAFF_WORKERS.includes(i as typeof STAFF_WORKERS[number])&&s.npcs[i]?.presence==='inside'&&!s.npcs[i].duty;
+const available=(s:Simulation,i:number)=>STAFF_WORKERS.includes(i as typeof STAFF_WORKERS[number])&&s.npcs[i]?.presence==='inside'&&!s.npcs[i].duty&&!(s.services.coffee?.recipient.kind==='staff'&&s.services.coffee.recipient.id===i);
 export function dialogueFor(e:Encounter):{speaker:number;text:string} {
   const turn=Math.floor(e.elapsed/4)%3,[a,b]=e.participants,speaker=turn===1?b:a;
-  const idea:Record<string,string>={ATLAS:'Kita rapikan alur kerja proyek ini.',NOVA:'Aku siapkan konsep visualnya.',LYRA:'Tim juga perlu pembagian tugas yang seimbang.',ORION:'Aku menemukan pola menarik dari riset.',SAGE:'Kita libatkan komunitas dalam rencana ini.',NEXUS:'Sistemnya bisa dibuat lebih sederhana.',Felin:'Kita susun rencana pengembangan tim yang realistis.'};
-  const talk:Record<string,string>={ATLAS:'Terima kasih untuk kerja tim hari ini.',NOVA:'Ada ide bagus untuk desain berikutnya!',LYRA:'Bagaimana kabarmu hari ini?',ORION:'Aku menemukan bacaan menarik tadi.',SAGE:'Mau coba menu pantry hari ini?',NEXUS:'Komputer sudah aman. Waktunya rehat.',Felin:'Senang melihat perkembangan tim semakin baik.'};
-  if(e.kind==='brainstorm') return {speaker,text:turn===0?idea[staff[a].name]:turn===1?'Aku bantu tindak lanjutnya. Kita cek bersama.':'Setuju. Kita coba langkah itu.'};
+  const idea=['Kita rapikan alur kerja proyek ini.','Aku siapkan konsep visualnya.','Tim juga perlu pembagian tugas yang seimbang.','Aku menemukan pola menarik dari riset.','Kita libatkan komunitas dalam rencana ini.','Sistemnya bisa dibuat lebih sederhana.','Aku siapkan jadwal kunjungan.','Kita susun rencana pengembangan tim yang realistis.','Aku siapkan menu catering yang nyaman untuk tim.','Ruang yang rapi membantu semua orang bekerja.'];
+  const talk=['Terima kasih untuk kerja tim hari ini.','Ada ide bagus untuk desain berikutnya!','Bagaimana kabarmu hari ini?','Aku menemukan bacaan menarik tadi.','Mau coba menu pantry hari ini?','Komputer sudah aman. Waktunya rehat.','Senang menyambut semuanya.','Senang melihat perkembangan tim semakin baik.','Semoga menu hari ini cocok untukmu!','Enak juga rehat sebentar setelah berkeliling.'];
+  if(e.kind==='brainstorm') return {speaker,text:turn===0?idea[a]:turn===1?'Aku bantu tindak lanjutnya. Kita cek bersama.':'Setuju. Kita coba langkah itu.'};
   if(e.kind==='encourage') return {speaker,text:turn===0?'Kerjamu membantu tim. Terima kasih.':turn===1?'Terima kasih, aku jadi lebih semangat.':'Kita saling bantu, ya.'};
-  return {speaker,text:turn<2?talk[staff[speaker].name]:'Senang bisa ngobrol denganmu.'};
+  return {speaker,text:turn<2?talk[speaker]:'Senang bisa ngobrol denganmu.'};
 }
 export function requestInteraction(sim:Simulation,a:number,b:number,kind:InteractionKind,roomOverride?:number):Simulation {
   if(!officeOpen(sim.gameMinute)||dailyMeetingActive(sim)||![a,b].every(i=>available(sim,i))||a===b||!Object.hasOwn(interactionLabels,kind)||encounterFor(sim,a)||encounterFor(sim,b)) return sim;
   const roomId=roomOverride===2||roomOverride===5?roomOverride:kind==='brainstorm'?2:5;
   const lunch=sim.gameMinute>=720&&sim.gameMinute<780;
   if(roomId===2&&lunch) return sim;
-  const used=sim.encounters.filter(e=>e.roomId===roomId).flatMap(e=>e.chairs);
-  const seats=roomId===5?[lunchSlot(a),lunchSlot(b)]:Array.from({length:7},(_,i)=>i).filter(i=>!used.includes(i)).slice(0,2);
+  const seatAt=roomId===5?lunchSeat:meetingSeat,count=roomId===5?9:7;
+  const used=[...sim.encounters.filter(e=>e.roomId===roomId).flatMap(e=>e.chairs),...Array.from({length:count},(_,slot)=>slot).filter(slot=>sim.npcs.some((n,i)=>i!==a&&i!==b&&n.presence==='inside'&&(pointDistance(n.position,seatAt(slot).position)<.2||pointDistance(activityGoal(sim,i),seatAt(slot).position)<.2)))];
+  if(roomId===2&&sim.ownerActive&&sim.ownerRoom===2)used.push(6);
+  const preferred=roomId===5?[lunchSlot(a),lunchSlot(b)]:[];
+  const seats=[...preferred,...Array.from({length:count},(_,i)=>i)].filter((slot,i,all)=>all.indexOf(slot)===i&&!used.includes(slot)).slice(0,2);
   if(seats.length!==2||seats.some(i=>used.includes(i))) return sim;
   const e:Encounter={id:sim.nextEncounterId,participants:[a,b],chairs:seats as [number,number],kind,roomId,slot:seats[0],phase:'approach',elapsed:0,timeout:nowOf(sim)+150};
   return {...sim,npcs:sim.npcs.map((n,i)=>i===a||i===b?{...n,override:null,errandUntil:0,destination:roomId,path:findPath(n.position,interactionGoal(e,i))}:n),encounters:[...sim.encounters,e],nextEncounterId:sim.nextEncounterId+1,events:[staff[a].name+' & '+staff[b].name+' → '+interactionLabels[kind],...sim.events].slice(0,8)};

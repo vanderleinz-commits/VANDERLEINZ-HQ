@@ -1,6 +1,6 @@
 # Blue and Space Headquarters — Official Visual Foundation
 
-**Phase 01 · Premium Cozy Stylized 3D**
+**Premium Cozy Stylized 3D · Shared visual and character foundation**
 
 Nama resmi: **Blue and Space Headquarters**. Nama pendek: **Blue and Space**.
 
@@ -47,12 +47,28 @@ Mata/alis ekspresif, rambut bermassa jelas, serta pakaian dengan tepi lembut men
 | NEXUS | Quiff, kacamata ramping | Deep teal overshirt | Fokus, sabar |
 | Amanda | Bun rendah, collar rapi, pin hangat | Sky blue uniform | Menyambut, ceria |
 | Felin | Bun lembut dengan clasp, blazer lavender | Soft lavender, cream, dusty blue | Hangat, suportif, teliti |
+| Yati | Sanggul rapi, apron dengan kantong | Soft blue, warm sand apron | Perhatian, ceria, melayani |
+| Deno | Rambut keriting bermassa lembut, polo kerja | Muted teal, midnight trousers | Tekun, santai, membantu |
+
+Founder diwakili avatar pemilik dengan profil penampilan tersendiri. Tiga profil tamu mengikuti keluarga proporsi yang sama. Indeks staf 0–9 tetap stabil; tamu memakai indeks 10–12 dan avatar indeks 13. Jabatan, tempat kerja, dan cerita karakter tetap; nama serta penampilan dapat disesuaikan.
 
 `worldData.ts` mengambil appearance staf dari profil ini. Geometri dibagi antar karakter; satu rig sendi hierarkis prosedural menggerakkan seluruh cast. Belum ada mesh skeletal clips. Ekspresi neutral/happy/focused menggunakan mata, alis, mulut, serta kedipan. Bahasa gerak dan acuan kursi ada di [ANIMATION_PLAN.md](ANIMATION_PLAN.md).
 
+## Penyesuaian karakter di Studio
+
+Studio menyediakan nama, tujuh model rambut, empat bentuk pakaian, tiga bentuk wajah, dua bentuk mata, kacamata, serta warna kulit/rambut/mata/atasan/celana/aksen. Perubahan tampak pada rig yang sama di Studio dan kantor. Tombol **Pulihkan karakter ini** mengembalikan satu profil ke desain resmi; tidak mengubah staf lain.
+
+Nama dibatasi 24 karakter dan ditampilkan sebagai teks React. Penyimpanan terpisah memakai kunci `blue-and-space-character-appearance-v1`, dengan versi serta daftar field yang divalidasi. Data rusak memakai penampilan resmi; field jabatan, ruangan, dan proporsi tidak diterima. Jika penyimpanan perangkat tidak tersedia, tampilan masih berubah untuk sesi berjalan dan Studio memberi pesan yang sesuai. Akun/cloud sync untuk penampilan belum tersedia.
+
+Pakaian dibedakan melalui lapel/bentuk kancing, kerah polo, lengan, dan apron. Warna bebas tetap memakai bahan hangat matte yang sama. Bentuk kepala hanya berubah sedikit; penyunting tidak merusak proporsi miniature human. Material yang dapat diedit dibuat satu kali per identitas dan diwarnai ulang, sehingga drag pemilih warna tidak menumpuk material GPU baru.
+
 ## Arsitektur dan interior
 
-Volume sederhana, sudut membulat, kayu/cream/biru, serta detail pada area yang dilihat memberi kesan miniatur yang dirancang tangan. Lobby resepsionis dan Open Workspace masing-masing memakai layout dua kali ruangan biasa; counter kayu/signage/tanaman menjaga Amanda jauh dari pintu utama. Meeting Room memiliki enam kursi tim dan satu kursi Founder; Client Meeting Room memberi ruang percakapan privat. Founder Office menempatkan meja kerja membelakangi pintu dan sofa/meja di sisi tamu. Founder adalah avatar pemilik, bukan NPC. Pantry memakai sand/cream; server muted teal; HRD Felin memakai lavender; library kayu/daun; WC keramik cream/trim blue.
+Volume sederhana, sudut membulat, kayu/cream/biru, serta detail pada area yang dilihat memberi kesan miniatur yang dirancang tangan. Ruangan diperluas dengan skala denah 1,3, sementara furnitur/karakter mempertahankan skala manusia miniatur. Lobby resepsionis dan Open Workspace masing-masing memakai layout dua kali ruangan biasa; counter kayu/signage/tanaman menjaga Amanda jauh dari pintu utama. Sofa lounge berada di ujung resepsionis, terpisah dari jalur layanan.
+
+Meeting Room memiliki enam kursi tim dan satu kursi Founder; Client Meeting Room memakai delapan kursi untuk tamu dan tim terkait. Meja Founder, Manager, HRD, dan IT berada di bagian belakang ruangan dengan pengguna menghadap pintu. Founder Office memakai dua sofa berbentuk L dan meja di tengah. Founder adalah avatar pemilik. Pantry memakai sand/cream; server muted teal; HRD Felin memakai lavender; library kayu/daun; WC keramik cream/trim blue. Gudang dan Ruang OB memuat rak/box persediaan, perlengkapan bersih-bersih, serta sudut istirahat Yati dan Deno.
+
+Kopi/cangkir tidak menjadi hiasan tetap di setiap workstation. Sistem layanan Yati menampilkan minuman setelah pengantaran kepada staf atau tamu; menyiapkan kopi memakai gerak menekan mesin, dan mengambil air minum memakai gelas tersendiri. Deno membawa sapu di samping tubuh ketika berpindah area lalu menurunkannya saat membersihkan. Ini menjaga visual benda tetap berhubungan dengan kegiatan kantor.
 
 Bintang, lengkung langit, serta lingkaran geometris digunakan sebagai hiasan kecil pada karya dinding/signage. Setting tetap kantor yang membumi. Hindari kapal luar angkasa, neon/hologram, serta mesin futuristis dominan.
 
@@ -82,8 +98,8 @@ Studio dibuat saat dibuka. Ukur FPS, draw calls, dan segitiga bersama viewport/p
 
 ## Validasi kamera dan aset berikutnya
 
-Director menguji massa warna, siluet, komposisi dua lantai, zoom/orbit, serta fokus ruangan. Avatar menguji wajah, skala furnitur, ruang navigasi, dan gerak dari dekat. Keduanya memakai aset yang sama. Studio menyediakan satu karakter/lineup, pose, ekspresi, furnitur kerja, dan Miniature/Third person/Face detail.
+Director menguji massa warna, siluet, komposisi dua lantai, zoom/orbit, serta fokus ruangan. Avatar menguji wajah, skala furnitur, ruang navigasi, dan gerak dari dekat. Keduanya memakai aset yang sama. Studio menyediakan satu karakter/lineup sepuluh staf, penyunting nama/penampilan, pose, ekspresi, furnitur kerja, dan Miniature/Third person/Face detail.
 
 Aset berikutnya harus mempertahankan proporsi, arah +Z, acuan kursi, profil warna, serta bahasa bahan. Uji depan/sisi/belakang pada dua jarak; jangan hanya mengandalkan warna untuk identitas. Periksa transisi, benturan tubuh/prop, serta biaya renderer. Nama resmi digunakan di UI, signage, aset, komentar baru, dan dokumentasi. Hasil serta batas pemeriksaan dicatat di [QA.md](QA.md).
 
-IK, skeletal rig, model impor, dan gameplay bisnis baru berada di luar Phase 01. Fondasi proporsi, profil, bahan, serta pose dapat dipertahankan ketika teknologi aset berkembang.
+Kontak prosedural memakai solusi lengan dua ruas dan perhitungan tinggi sol saat duduk/bergerak. Belum ada penguncian langkah berdasarkan jarak dunia, IK untuk setiap anak tangga, skeleton berbobot, atau animasi pemindahan prop dengan constraint fisika. Fondasi proporsi, profil, bahan, serta pose dapat dipertahankan ketika teknologi aset berkembang.

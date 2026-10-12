@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createSimulation, stepSimulation, defaultSave, parseSave, assignActivity, activityGoal, absoluteMinute, seatedAt } from '../src/simulation.ts';
 import { requestInteraction, cancelInteraction, bondKey, dialogueFor, interactionGoal } from '../src/social.ts';
 import type { InteractionKind } from '../src/social.ts';
-import { isWalkable, roomAt, moveAlong } from '../src/navigation.ts';
+import { findPath, isWalkable, roomAt, moveAlong } from '../src/navigation.ts';
 import { quietSimulation } from './helpers.ts';
 import { STAFF_WORKERS } from '../src/worldData.ts';
 import { lunchSeat, lunchSlot } from '../src/officeLayout.ts';
@@ -28,7 +28,7 @@ test('paired workers reach shared chairs, exchange turns, and gain a relationshi
   stepSimulation(sim, 0.2, 1);
   assert.deepEqual(sim, previousFrame, 'Advancing movement and social state must preserve previous frames');
   let reached = false, sawReply = false;
-  for (let i = 0; i < 300; i++) {
+  for (let i = 0; i < 600; i++) {
     sim = stepSimulation(sim, 0.2, 1);
     for (const npc of sim.npcs) assert.ok(isWalkable(npc.position));
     const encounter = sim.encounters[0];
@@ -50,8 +50,8 @@ test('paired workers reach shared chairs, exchange turns, and gain a relationshi
 
 test('chat, brainstorm, and encouragement complete from different departments and have distinct benefits', () => {
   for (const kind of ['chat', 'brainstorm', 'encourage'] as InteractionKind[]) {
-    const base = availableOffice(); base.npcs[1].focus = 35; base.npcs[1].energy = 40;
-    const sim = advance(requestInteraction(base, 1, 5, kind), 100);
+    const base = availableOffice(540); base.npcs[1].focus = 35; base.npcs[1].energy = 40;
+    const sim = advance(requestInteraction(base, 1, 5, kind), 150);
     assert.equal(sim.completedInteractions, 1, kind);
     assert.equal(sim.encounters.length, 0);
     assert.equal(sim.bonds[bondKey(1, 5)], kind === 'encourage' ? 35 : 33);
@@ -74,11 +74,11 @@ test('busy workers, Amanda, absent workers, office closure, and a daily meeting 
 });
 
 test('Felin can join worker conversations and has bonds with all six colleagues', () => {
-  const base = availableOffice();
+  const base = availableOffice(540);
   let sim = requestInteraction(base, 7, 4, 'chat');
   assert.equal(sim.encounters.length, 1);
-  assert.equal(Object.keys(sim.bonds).length, 21);
-  sim = advance(sim, 100);
+  assert.equal(Object.keys(sim.bonds).length, 36);
+  sim = advance(sim, 150);
   assert.equal(sim.completedInteractions, 1);
   assert.equal(sim.bonds[bondKey(7, 4)], 33);
 });
@@ -86,6 +86,7 @@ test('Felin can join worker conversations and has bonds with all six colleagues'
 test('a pantry conversation leaves an unrelated worker’s break chair free', () => {
   const base=availableOffice();
   base.npcs[0].override={activity:'break',until:absoluteMinute(base)+45};
+  base.npcs[0].breakPlan={day:1,kind:'pantry',slot:lunchSlot(0)};
   base.npcs[0].position=lunchSeat(lunchSlot(0)).position;
   base.npcs[0].path=[];
   const sim=requestInteraction(base,1,2,'chat');
@@ -94,19 +95,31 @@ test('a pantry conversation leaves an unrelated worker’s break chair free', ()
   for(const participant of [1,2])assert.notDeepEqual(interactionGoal(sim.encounters[0],participant),base.npcs[0].position);
 });
 
-test('lunch creates three pairs with distinct chair anchors and leaves Amanda at reception', () => {
+test('a conversation reserves incoming break seats before the other employee arrives', () => {
+  const base=availableOffice();
+  base.npcs[1].override={activity:'break',until:absoluteMinute(base)+45};
+  base.npcs[1].breakPlan={day:1,kind:'pantry',slot:lunchSlot(1)};
+  base.npcs[1].path=findPath(base.npcs[1].position,lunchSeat(lunchSlot(1)).position);
+  base.npcs[3].position=lunchSeat(lunchSlot(0)).position;base.npcs[3].path=[];
+  const sim=requestInteraction(base,0,2,'chat');
+  assert.equal(sim.encounters.length,1);
+  assert.ok(!sim.encounters[0].chairs.includes(lunchSlot(1)));
+  assert.ok(!sim.encounters[0].chairs.includes(lunchSlot(0)));
+});
+
+test('pantry break attendees can form four pairs with distinct chair anchors and leave Amanda at reception', () => {
   let sim = availableOffice(725);
   sim.npcs.forEach((npc) => { npc.nextSocialAt = 0; });
-  for (const index of STAFF_WORKERS) sim.npcs[index].position = lunchSeat(lunchSlot(index)).position;
+  for (const index of STAFF_WORKERS){sim.npcs[index].position = lunchSeat(lunchSlot(index)).position;sim.npcs[index].breakPlan={day:1,kind:'pantry',slot:lunchSlot(index)};}
   const amanda = structuredClone(sim.npcs[6].position);
   sim = stepSimulation(sim, 0.2, 1);
-  assert.equal(sim.encounters.length, 3);
-  assert.equal(new Set(sim.encounters.map((e) => e.slot)).size, 3);
+  assert.equal(sim.encounters.length, 4);
+  assert.equal(new Set(sim.encounters.map((e) => e.slot)).size, 4);
   const goals = sim.encounters.flatMap((e) => e.participants.map((i) => JSON.stringify(interactionGoal(e, i))));
-  assert.equal(new Set(goals).size, 6);
-  assert.ok(sim.encounters.every((e) => e.participants.every((i) => i < 6)));
+  assert.equal(new Set(goals).size, 8);
+  assert.ok(sim.encounters.every((e) => e.participants.every((i) => i!==6&&i<10)));
   sim = advance(sim, 30);
-  assert.equal(sim.completedInteractions, 3);
+  assert.equal(sim.completedInteractions, 4);
   assert.deepEqual(sim.npcs[6].position, amanda);
 });
 
@@ -146,7 +159,7 @@ test('lunch end, meeting start, and office closure cancel conversations without 
 
 test('active conversations survive version 5 save/reload with participant chairs, phase, bonds, and remaining time', () => {
   const save = defaultSave(); save.simulation = requestInteraction(availableOffice(), 0, 1, 'chat');
-  for (let i = 0; i < 200 && save.simulation.encounters[0]?.phase !== 'talking'; i++) save.simulation = stepSimulation(save.simulation, 0.2, 1);
+  for (let i = 0; i < 500 && save.simulation.encounters[0]?.phase !== 'talking'; i++) save.simulation = stepSimulation(save.simulation, 0.2, 1);
   save.simulation = advance(save.simulation, 2);
   assert.equal(save.simulation.encounters[0].phase, 'talking');
   const restored = parseSave(JSON.stringify(save));

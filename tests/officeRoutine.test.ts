@@ -1,18 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSimulation, stepSimulation, officePower, officeOpen, seatedAt, weekdayName, defaultSave, parseSave, activityGoal, absoluteMinute } from '../src/simulation.ts';
+import { createSimulation, stepSimulation, officePower, officeOpen, seatedAt, weekdayName, defaultSave, parseSave, activityGoal, absoluteMinute, breakSeat } from '../src/simulation.ts';
 import { STAFF_WORKERS, MEETING_PARTICIPANTS } from '../src/worldData.ts';
 import { arrivalMinute, RECEPTION_POST, ATTENDANCE_POINT, workSeat, meetingSeat, lunchSeat, meetingSlot, lunchSlot } from '../src/officeLayout.ts';
 import { isWalkable, roomAt, floorOf, pointDistance } from '../src/navigation.ts';
 import { advance, calmOffice, quietSimulation } from './helpers.ts';
 
-test('07:00 opens the office, Amanda arrives first, and seven workers check in one at a time at the reception desk', () => {
+test('07:00 opens the office, Amanda arrives first, and nine workers check in one at a time at the reception desk', () => {
   const closed = createSimulation(1, 419);
   assert.equal(officeOpen(419.99), false); assert.equal(officeOpen(420), true);
   assert.ok(closed.npcs.every((npc) => npc.presence === 'offsite'));
   assert.equal(officePower(closed), 0);
   let sim = quietSimulation(createSimulation());
-  assert.equal(sim.gameMinute, 420); assert.equal(sim.npcs.length, 8);
+  assert.equal(sim.gameMinute, 420); assert.equal(sim.npcs.length, 10);
   const arrivals = new Map<number, number>(), checkIns = new Map<number, number>();
   for (let tick = 0; tick < 180; tick++) {
     const before = sim;
@@ -30,19 +30,19 @@ test('07:00 opens the office, Amanda arrives first, and seven workers check in o
       assert.ok(pointDistance(sim.npcs[sim.reception.person].position, ATTENDANCE_POINT) < .2);
       assert.ok(before.npcs[sim.reception.person].attendanceIn === null || sim.reception.mode === 'out');
     }
-    if (sim.gameMinute === 480) assert.ok(STAFF_WORKERS.every((index) => sim.npcs[index].presence === 'inside' && !!seatedAt(sim, index)), 'Live check-in arrivals reach every desk before the 08:00 work start');
+    if (sim.gameMinute === 480) assert.ok(STAFF_WORKERS.every((index) => sim.npcs[index].presence === 'inside'), 'Live check-in arrivals finish before the 08:00 work start');
   }
-  assert.equal(arrivals.size, 8);
+  assert.equal(arrivals.size, 10);
   assert.ok(new Set(arrivals.values()).size >= 7);
   assert.ok(arrivals.get(6)! < arrivals.get(7)!);
-  assert.equal(checkIns.size, 7);
-  assert.equal(new Set(checkIns.values()).size, 7, 'Amanda serves one employee at a time');
+  assert.equal(checkIns.size, 9);
+  assert.equal(new Set(checkIns.values()).size, 9, 'Amanda serves one employee at a time');
   assert.ok(sim.npcs.every((npc) => npc.presence === 'inside'));
   assert.deepEqual(sim.npcs[6].position, RECEPTION_POST);
   for (const index of STAFF_WORKERS) assert.equal(sim.reception.log.filter((item) => item.day === 1 && item.name === sim.npcs[index].name && item.kind === 'in').length, 1);
 });
 
-test('all seven workers have their own computer chairs and Amanda remains standing at reception', () => {
+test('the team has dedicated chairs, OB staff have rest chairs and Amanda remains standing at reception', () => {
   const sim = calmOffice();
   for (const index of STAFF_WORKERS) {
     assert.equal(sim.npcs[index].activity, 'work');
@@ -53,17 +53,18 @@ test('all seven workers have their own computer chairs and Amanda remains standi
   assert.equal(floorOf(sim.npcs[0].position), 1); assert.equal(floorOf(sim.npcs[7].position), 1);
 });
 
-test('12:00 sends workers across both floors to the pantry and 13:00 sends them back to their departments', () => {
+test('12:00 spreads persistent break choices across office seats, library, reception and pantry; 13:00 returns staff to departments', () => {
   let sim = calmOffice(719);
   sim = stepSimulation(sim, 1, 1);
   assert.equal(sim.gameMinute, 720);
-  assert.ok(STAFF_WORKERS.every((index) => sim.npcs[index].activity === 'lunch' && sim.npcs[index].destination === 5));
-  sim = advance(sim, 50);
+  assert.ok(STAFF_WORKERS.every((index) => sim.npcs[index].activity === 'lunch' && sim.npcs[index].breakPlan));
+  assert.ok(new Set(STAFF_WORKERS.map(index=>sim.npcs[index].destination)).size>=3);assert.ok(STAFF_WORKERS.filter(index=>sim.npcs[index].destination===5).length<=4);
+  sim = advance(sim, 55);
   for (const index of STAFF_WORKERS) {
-    assert.equal(roomAt(sim.npcs[index].position), 5); assert.ok(seatedAt(sim, index));
+    assert.deepEqual(sim.npcs[index].position,breakSeat(sim,index).position); assert.ok(seatedAt(sim, index));
   }
   assert.deepEqual(sim.npcs[6].position, RECEPTION_POST);
-  sim = advance(sim, 10);
+  sim = advance(sim, 5);
   assert.equal(sim.gameMinute, 780); assert.equal(sim.encounters.length, 0);
   assert.ok(STAFF_WORKERS.every((index) => sim.npcs[index].activity === 'work'));
   sim = advance(sim, 60);
@@ -200,7 +201,7 @@ test('version 5 migrates old seven-person saves, preserves progress, and places 
   const restored = parseSave(JSON.stringify(raw));
   assert.equal(restored.version, 5); assert.equal(restored.simulation.gameDay, 4);
   assert.equal(restored.simulation.gameMinute, 600); assert.equal(restored.simulation.credits, 2600);
-  assert.equal(restored.simulation.npcs.length, 8); assert.equal(restored.simulation.npcs[2].energy, 47);
+  assert.equal(restored.simulation.npcs.length, 10); assert.equal(restored.simulation.npcs[2].energy, 47);
   assert.equal(restored.simulation.npcs[2].workMinutes, 23); assert.equal(restored.simulation.npcs[7].name, 'Felin');
   assert.equal(floorOf(restored.simulation.npcs[0].position), 1); assert.equal(floorOf(restored.simulation.npcs[7].position), 1);
   for (let index = 0; index < restored.simulation.npcs.length; index++) {

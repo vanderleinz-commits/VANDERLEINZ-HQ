@@ -5,6 +5,7 @@ import type { Simulation } from '../src/simulation.ts';
 export function quietSimulation(sim: Simulation, finishMeeting = true): Simulation {
   if (finishMeeting) sim.meeting.phase = 'done';
   Object.assign(sim, { nextManagementAt: 1e8, nextIssueAt: 1e8, nextClientAt: 1e8 });
+  Object.assign(sim.services,{nextCoffeeAt:1e8,nextCleaningAt:1e8,catering:{phase:'ready',elapsed:24}});
   sim.npcs.forEach((npc) => Object.assign(npc, { nextLeisureAt: 1e8, nextSocialAt: absoluteMinute(sim) + 200, duty: null }));
   return sim;
 }

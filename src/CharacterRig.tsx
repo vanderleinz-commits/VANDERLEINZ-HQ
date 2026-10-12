@@ -5,13 +5,18 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CHARACTER_STANDARD, PALETTE, SURFACES } from './artDirection';
 import { characterProfile } from './characterProfiles';
+import type { HairStyle } from './characterProfiles';
+import { useCharacterRevision } from './useCharacterRevision';
+import { legSoleHeight, seatedLegContact, solveArmContact } from './characterContacts';
+import { useAnimatedCharacterBatch } from './AnimatedCharacterBatch';
 
 export type Pose = 'idle' | 'walk' | 'work' | 'talk' | 'wave' | 'coffee' | 'think' | 'eat'
-  | 'read' | 'repair' | 'cook' | 'sign' | 'inspect' | 'stairs' | 'toilet';
+  | 'read' | 'repair' | 'cook' | 'sign' | 'inspect' | 'stairs' | 'toilet' | 'carry' | 'deliver' | 'clean' | 'phone' | 'water' | 'brew';
 export type CharacterExpression = 'neutral' | 'happy' | 'focused';
 type Props = {
   color: string; hair: string; pose: Pose | RefObject<Pose>; speed: number;
   reducedMotion: boolean; variant?: number; seated?: boolean; expression?: CharacterExpression;
+  equipment?: 'broom' | 'tray';
 };
 type Surface = keyof typeof SURFACES;
 type Materials = { skin: THREE.MeshStandardMaterial; hair: THREE.MeshStandardMaterial; clothing: THREE.MeshStandardMaterial;
@@ -75,82 +80,112 @@ function material(color: string, surface: Surface = 'fabric', opacity = 1) {
   }
   return result;
 }
-function castMaterials(color: string, hair: string, variant: number): Materials {
+const profileMaterials = new Map<number, Materials>();
+function castMaterials(variant: number): Materials {
   const profile = characterProfile(variant);
-  return {
-    skin: material(profile.skin, 'skin'), hair: material(hair), clothing: material(color),
-    trousers: material(profile.trousers), shirt: material(PALETTE.cream), accent: material(profile.accent, 'trim'),
+  let result = profileMaterials.get(variant);
+  if (!result) {
+    // Editable surfaces have one material per identity, shared by its office and Studio instances.
+    // Recoloring those materials avoids accumulating GPU allocations while dragging a color picker.
+    result = {
+    skin: material(profile.skin, 'skin').clone(), hair: material(profile.hair).clone(), clothing: material(profile.color).clone(),
+    trousers: material(profile.trousers).clone(), shirt: material(PALETTE.cream), accent: material(profile.accent, 'trim').clone(),
     shoe: material(variant === 4 || variant === 6 || variant === 7 || variant === 9 ? '#76604E' : '#35475D', 'wood'), sole: material('#DAD8CC'),
-    eye: material('#FFFCF6', 'skin'), iris: material(variant === 2 || variant === 3 || variant === 7 || variant === 9 ? '#54726B' : '#415C71', 'skin'),
+    eye: material('#FFFCF6', 'skin'), iris: material(profile.eyeColor, 'skin').clone(),
     dark: material('#25394D', 'skin'), lip: material('#956454', 'skin'),
     blush: material('#D7897C', 'skin', 0.2), metal: material('#52667D', 'trim'),
-  };
+    };
+    profileMaterials.set(variant, result);
+  }
+  result.skin.color.set(profile.skin); result.hair.color.set(profile.hair); result.clothing.color.set(profile.color);
+  result.trousers.color.set(profile.trousers); result.accent.color.set(profile.accent); result.iris.color.set(profile.eyeColor);
+  return result;
 }
 
 // Local +Z is forward. The same proportions and joints are used in both camera modes.
-export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant = 0, seated = false, expression = 'neutral' }: Props) {
+export function CharacterRig({ pose, speed, reducedMotion, variant = 0, seated = false, expression = 'neutral', equipment }: Props) {
+  useCharacterRevision();
   const root = useRef<THREE.Group>(null), torso = useRef<THREE.Group>(null), head = useRef<THREE.Group>(null);
   const leftArm = useRef<THREE.Group>(null), rightArm = useRef<THREE.Group>(null);
   const leftForearm = useRef<THREE.Group>(null), rightForearm = useRef<THREE.Group>(null);
   const leftLeg = useRef<THREE.Group>(null), rightLeg = useRef<THREE.Group>(null);
   const leftKnee = useRef<THREE.Group>(null), rightKnee = useRef<THREE.Group>(null);
+  const leftFoot = useRef<THREE.Group>(null), rightFoot = useRef<THREE.Group>(null);
   const eyes = useRef<THREE.Group>(null), brows = useRef<THREE.Group>(null), mouth = useRef<THREE.Group>(null);
   const ponytail = useRef<THREE.Group>(null), mug = useRef<THREE.Group>(null), tablet = useRef<THREE.Group>(null);
+  const waterGlass = useRef<THREE.Group>(null);
   const bowl = useRef<THREE.Group>(null), spoon = useRef<THREE.Group>(null), book = useRef<THREE.Group>(null);
   const tool = useRef<THREE.Group>(null), pan = useRef<THREE.Group>(null), pen = useRef<THREE.Group>(null);
+  const tray = useRef<THREE.Group>(null), broom = useRef<THREE.Group>(null), phone = useRef<THREE.Group>(null);
   const time = useRef(variant * 0.83), sitting = useRef(seated ? 1 : 0);
-  const previous = useRef({ pose: '', seated, expression });
-  const mat = castMaterials(color, hair, variant);
-  const feminine = variant === 1 || variant === 2 || variant === 6 || variant === 7 || variant === 10;
-  const shortSleeve = variant === 4;
+  const previous = useRef({ pose: '', seated, expression, equipment });
+  const mat = castMaterials(variant), profile = characterProfile(variant);
+  const synchronizeMeshes = useAnimatedCharacterBatch(root, `${variant}/${profile.hairStyle}/${profile.garment}/${profile.glasses}`);
+  const feminine = [1, 2, 6, 7, 8, 10, 12].includes(variant);
+  const shortSleeve = profile.garment === 'polo' || profile.garment === 'overshirt';
+  const faceScale: Vec3 = profile.faceShape === 'round' ? [1.06, .98, 1.02] : profile.faceShape === 'narrow' ? [.93, 1.02, .97] : [1, 1, 1];
   const resting = RESTING_POSTURES[((Math.floor(variant) % RESTING_POSTURES.length) + RESTING_POSTURES.length) % RESTING_POSTURES.length];
 
   function animate(delta: number, immediate = false) {
     if (!root.current || !torso.current || !head.current || !leftArm.current || !rightArm.current
       || !leftForearm.current || !rightForearm.current || !leftLeg.current || !rightLeg.current || !leftKnee.current || !rightKnee.current) return;
     const state = typeof pose === 'string' ? pose : pose.current;
-    const changed = previous.current.pose !== state || previous.current.seated !== seated || previous.current.expression !== expression;
+    const changed = previous.current.pose !== state || previous.current.seated !== seated || previous.current.expression !== expression || previous.current.equipment !== equipment;
     if (speed === 0 && !immediate && !changed) return;
     const dt = Math.min(delta, 0.075);
     const snap = immediate || speed === 0;
     if (!snap) time.current += dt * Math.min(speed, 2);
     const t = time.current, subtle = reducedMotion ? 0 : 1;
-    const walk = (state === 'walk' || state === 'stairs') && !seated;
+    const walk = (state === 'walk' || state === 'stairs' || state === 'carry') && !seated;
     const cycle = Math.sin(t * (state === 'stairs' ? 3.5 : 4.2));
     const ease = (value: number, target: number) => snap ? target : THREE.MathUtils.lerp(value, target, 1 - Math.exp(-8 * dt));
     sitting.current = ease(sitting.current, seated ? 1 : 0);
     const sit = sitting.current;
-    root.current.position.y = ease(root.current.position.y, (SEATED_HIP - HIP) * sit
-      + (walk ? Math.abs(cycle) * 0.011 : Math.sin(t * 1.7) * 0.003) * subtle);
+    const sittingLeg = seatedLegContact();
+    const stride = walk ? (state === 'stairs' ? .42 : .29) * subtle : 0;
+    const thighLeft = sittingLeg.thigh * sit + cycle * stride;
+    const thighRight = sittingLeg.thigh * sit - cycle * stride;
+    const kneeLeft = sittingLeg.knee * sit + (walk ? Math.max(0, -cycle) * (state === 'stairs' ? .72 : .36) * subtle : 0);
+    const kneeRight = sittingLeg.knee * sit + (walk ? Math.max(0, cycle) * (state === 'stairs' ? .72 : .36) * subtle : 0);
+    const hipHeight = HIP + (SEATED_HIP - HIP) * sit;
+    const floorCorrection = Math.max(0, -Math.min(legSoleHeight(hipHeight, thighLeft, kneeLeft), legSoleHeight(hipHeight, thighRight, kneeRight)));
+    root.current.position.y = ease(root.current.position.y, (SEATED_HIP - HIP) * sit + floorCorrection);
     root.current.rotation.z = ease(root.current.rotation.z, walk ? Math.sin(t * 2.1) * 0.018 * subtle : 0);
     torso.current.rotation.y = ease(torso.current.rotation.y, walk ? cycle * 0.035 * subtle : state === 'talk' ? Math.sin(t * 1.1) * 0.025 * subtle : 0);
     torso.current.scale.y = ease(torso.current.scale.y, 1 + (!walk ? Math.sin(t * 1.7) * 0.004 * subtle : 0));
-    // A slight downward thigh slope places the soles on the floor at the shared .64 seat height.
-    const seatedThigh = -1.09 * sit;
-    leftLeg.current.rotation.x = ease(leftLeg.current.rotation.x, seatedThigh + (walk ? cycle * (state === 'stairs' ? 0.48 : 0.33) * subtle : 0));
-    rightLeg.current.rotation.x = ease(rightLeg.current.rotation.x, seatedThigh + (walk ? -cycle * (state === 'stairs' ? 0.48 : 0.33) * subtle : 0));
-    leftKnee.current.rotation.x = ease(leftKnee.current.rotation.x, 1.09 * sit + (walk ? Math.max(0, -cycle) * (state === 'stairs' ? 0.7 : 0.4) * subtle : 0));
-    rightKnee.current.rotation.x = ease(rightKnee.current.rotation.x, 1.09 * sit + (walk ? Math.max(0, cycle) * (state === 'stairs' ? 0.7 : 0.4) * subtle : 0));
+    leftLeg.current.rotation.x = ease(leftLeg.current.rotation.x, thighLeft);
+    rightLeg.current.rotation.x = ease(rightLeg.current.rotation.x, thighRight);
+    leftKnee.current.rotation.x = ease(leftKnee.current.rotation.x, kneeLeft);
+    rightKnee.current.rotation.x = ease(rightKnee.current.rotation.x, kneeRight);
+    if (leftFoot.current) leftFoot.current.rotation.x = -leftLeg.current.rotation.x - leftKnee.current.rotation.x;
+    if (rightFoot.current) rightFoot.current.rotation.x = -rightLeg.current.rotation.x - rightKnee.current.rotation.x;
+    const actualHip = HIP + root.current.position.y;
+    const contactGap = Math.min(legSoleHeight(actualHip, leftLeg.current.rotation.x, leftKnee.current.rotation.x), legSoleHeight(actualHip, rightLeg.current.rotation.x, rightKnee.current.rotation.x));
+    if (contactGap < 0) root.current.position.y -= contactGap;
     leftLeg.current.rotation.z = ease(leftLeg.current.rotation.z, -0.025 * sit);
     rightLeg.current.rotation.z = ease(rightLeg.current.rotation.z, 0.025 * sit);
     const targets = state === 'idle' && !seated ? resting : armTargets(state, seated, t, subtle);
-    leftArm.current.rotation.x = ease(leftArm.current.rotation.x, targets.leftShoulder);
-    rightArm.current.rotation.x = ease(rightArm.current.rotation.x, targets.rightShoulder);
-    leftArm.current.rotation.z = ease(leftArm.current.rotation.z, targets.leftSpread);
-    rightArm.current.rotation.z = ease(rightArm.current.rotation.z, targets.rightSpread);
-    leftForearm.current.rotation.x = ease(leftForearm.current.rotation.x, targets.leftElbow);
-    rightForearm.current.rotation.x = ease(rightForearm.current.rotation.x, targets.rightElbow);
+    const holdingBroom = equipment === 'broom' && !seated && ['walk','stairs','idle'].includes(state);
+    const holdingTray = equipment === 'tray' && !seated && ['walk','stairs','idle','carry'].includes(state);
+    const broomGrip = holdingBroom ? solveArmContact(HIP+.35,.85,.12) : null;
+    const trayGrip = holdingTray ? solveArmContact(HIP+.35,.98,.44) : null;
+    leftArm.current.rotation.x = ease(leftArm.current.rotation.x, trayGrip?.shoulder ?? targets.leftShoulder);
+    rightArm.current.rotation.x = ease(rightArm.current.rotation.x, trayGrip?.shoulder ?? broomGrip?.shoulder ?? targets.rightShoulder);
+    leftArm.current.rotation.z = ease(leftArm.current.rotation.z, holdingTray ? -.16 : targets.leftSpread);
+    rightArm.current.rotation.z = ease(rightArm.current.rotation.z, holdingTray ? .16 : holdingBroom ? .4 : targets.rightSpread);
+    leftForearm.current.rotation.x = ease(leftForearm.current.rotation.x, trayGrip?.elbow ?? targets.leftElbow);
+    rightForearm.current.rotation.x = ease(rightForearm.current.rotation.x, trayGrip?.elbow ?? broomGrip?.elbow ?? targets.rightElbow);
     rightForearm.current.rotation.y = ease(rightForearm.current.rotation.y,
       state === 'cook' ? Math.sin(t * 2.2) * 0.13 * subtle : state === 'sign' ? Math.sin(t * 3.8) * 0.05 * subtle : 0);
     head.current.rotation.x = ease(head.current.rotation.x, ['work', 'read', 'sign'].includes(state) ? 0.12 + Math.sin(t * 1.2) * 0.02 * subtle
-      : state === 'talk' ? Math.sin(t * 2.3) * 0.04 * subtle : state === 'repair' || state === 'cook' ? 0.1 : state === 'idle' ? resting.headX : 0);
+      : state === 'talk' ? Math.sin(t * 2.3) * 0.04 * subtle : ['repair','cook','brew'].includes(state) ? 0.1 : state === 'idle' ? resting.headX : 0);
     head.current.rotation.y = ease(head.current.rotation.y, state === 'inspect' ? Math.sin(t * 0.7) * 0.13 * subtle
       : state === 'talk' ? Math.sin(t * 1.1) * 0.09 * subtle : walk ? -cycle * 0.02 * subtle : state === 'idle' ? resting.headY : 0);
     head.current.rotation.z = ease(head.current.rotation.z, state === 'think' ? 0.07
       : (state === 'idle' ? resting.headZ : 0) + Math.sin(t * 0.9) * 0.012 * subtle);
     if (ponytail.current) ponytail.current.rotation.x = ease(ponytail.current.rotation.x, walk ? -cycle * 0.06 * subtle : 0);
-    const focused = expression === 'focused' || expression === 'neutral' && ['work', 'read', 'repair', 'sign'].includes(state);
-    const happy = expression === 'happy' || expression === 'neutral' && ['talk', 'wave', 'coffee'].includes(state);
+    const focused = expression === 'focused' || expression === 'neutral' && ['work', 'read', 'repair', 'sign','brew'].includes(state);
+    const happy = expression === 'happy' || expression === 'neutral' && ['talk', 'wave', 'coffee', 'water'].includes(state);
     const blinkPhase = t % 4.7;
     const eyelid = !reducedMotion && speed > 0 && blinkPhase > 4.52
       ? 1 - Math.sin((blinkPhase - 4.52) / 0.18 * Math.PI) * 0.93 : 1;
@@ -163,6 +198,11 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
       mug.current.rotation.x = ease(mug.current.rotation.x,
         -rightArm.current.rotation.x - rightForearm.current.rotation.x + sip * 0.35);
     }
+    if (waterGlass.current) {
+      waterGlass.current.visible = state === 'water';
+      const sip = (Math.sin(t * .62) + 1) / 2 * subtle;
+      waterGlass.current.rotation.x = ease(waterGlass.current.rotation.x, -rightArm.current.rotation.x - rightForearm.current.rotation.x + sip * .3);
+    }
     if (tablet.current) tablet.current.visible = state === 'work' && !seated || state === 'inspect';
     if (bowl.current) bowl.current.visible = state === 'eat';
     if (spoon.current) spoon.current.visible = state === 'eat' || state === 'cook';
@@ -170,21 +210,43 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
     if (tool.current) tool.current.visible = state === 'repair';
     if (pan.current) pan.current.visible = state === 'cook';
     if (pen.current) pen.current.visible = state === 'sign';
-    previous.current = { pose: state, seated, expression };
+    if (tray.current) {
+      tray.current.visible = state === 'carry' || state === 'deliver' || holdingTray;
+      // The tray remains level; a small serving reach follows both hands together.
+      tray.current.position.z = ease(tray.current.position.z, state === 'deliver' ? .455 + Math.sin(t * 1.3) * .006 * subtle : .44);
+      tray.current.rotation.z = -root.current.rotation.z;
+    }
+    if (broom.current) {
+      broom.current.visible = state === 'clean' || holdingBroom;
+      const sweep = Math.sin(t * 1.7) * .11 * subtle;
+      broom.current.position.x = ease(broom.current.position.x, holdingBroom ? .34 : .14 + sweep);
+      broom.current.position.y = ease(broom.current.position.y, holdingBroom ? .12 : 0);
+      broom.current.position.z = ease(broom.current.position.z, holdingBroom ? .13 : .43);
+      broom.current.rotation.z = ease(broom.current.rotation.z, holdingBroom ? -.035 : -.06 + sweep * .65);
+    }
+    if (phone.current) phone.current.visible = state === 'phone';
+    previous.current = { pose: state, seated, expression, equipment };
   }
   // Mount every saved pose exactly, even when the simulation is paused.
-  useLayoutEffect(() => { animate(0, true); }, []);
-  useFrame((_, delta) => animate(delta));
+  useLayoutEffect(() => { animate(0, true); synchronizeMeshes(); }, []);
+  useFrame((_, delta) => { animate(delta); synchronizeMeshes(); });
 
   return <group ref={root} dispose={null}>
     <mesh geometry={SHAPES.pelvis} material={mat.trousers} position={[0, HIP + 0.054, 0]} scale={[0.165, 0.174, 0.116]} castShadow />
     <group ref={torso} position={[0, HIP + 0.21, 0]}>
       <mesh geometry={SHAPES.torso} material={mat.clothing} scale={[feminine ? 0.93 : 1, 1, 0.72]} castShadow />
       <SoftBox position={[0, 0.122, 0.115]} scale={[0.106, 0.113, 0.019]} mat={mat.shirt} />
-      {[-1, 1].map(side => <SoftBox key={`collar${side}`} position={[side * 0.038, 0.159, 0.116]} scale={[0.055, 0.054, 0.016]} rotation={[0, 0, side * 0.28]} mat={mat.shirt} />)}
-      {(variant === 0 || variant === 3 || variant === 7 || variant === 8 || variant === 9 || variant === 10) && <>
+      {[-1, 1].map(side => <SoftBox key={`collar${side}`} position={[side * 0.038, 0.159, 0.116]} scale={[0.055, 0.054, 0.016]} rotation={[0, 0, side * 0.28]} mat={profile.garment === 'polo' ? mat.clothing : mat.shirt} />)}
+      {profile.garment === 'jacket' && <>
         {[-1, 1].map(side => <SoftBox key={`lapel${side}`} position={[side * 0.073, 0.078, 0.12]} scale={[0.039, 0.157, 0.022]} rotation={[0, 0, side * 0.21]} mat={mat.clothing} />)}
         {[0, 1].map(button => <Ball key={`button${button}`} position={[0, -0.016 - button * 0.043, 0.121]} scale={[0.007, 0.007, 0.006]} mat={mat.accent} detail />)}
+      </>}
+      {profile.garment === 'overshirt' && [-.02, .035, .09].map(y => <Ball key={y} position={[0,y,.135]} scale={[.008,.008,.006]} mat={mat.accent} detail />)}
+      {profile.garment === 'polo' && <SoftBox position={[0,.075,.139]} scale={[.026,.105,.015]} mat={mat.accent} />}
+      {profile.garment === 'apron' && <>
+        <SoftBox position={[0,-.015,.142]} scale={[.266,.28,.028]} mat={mat.accent} />
+        {[-1,1].map(side => <SoftBox key={side} position={[side*.094,.137,.135]} scale={[.033,.13,.026]} mat={mat.accent} />)}
+        <SoftBox position={[0,-.055,.163]} scale={[.16,.071,.009]} mat={mat.shirt} />
       </>}
       <SoftBox position={[0.098, 0.02, 0.132]} scale={[0.05, 0.061, 0.012]} mat={mat.shirt} />
       <SoftBox position={[0.098, 0.034, 0.14]} scale={[0.034, 0.008, 0.005]} mat={mat.accent} />
@@ -192,7 +254,7 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
       <SoftBox position={[0, -0.165, 0]} scale={[0.276, 0.018, 0.207]} mat={mat.clothing} />
     </group>
     <mesh geometry={SHAPES.cylinder} material={mat.skin} position={[0, HIP + 0.423, 0]} scale={[0.052, 0.105, 0.052]} />
-    <group ref={head} position={[0, HIP + 0.583, 0]}>
+    <group ref={head} position={[0, HIP + 0.583, 0]} scale={faceScale}>
       <Ball scale={[0.203, 0.212, 0.189]} mat={mat.skin} />
       <Ball position={[0, -0.097, 0.045]} scale={[0.137, 0.103, 0.129]} mat={mat.skin} />
       {[-1, 1].map(side => <group key={`ear${side}`} position={[side * 0.196, -0.008, -0.012]}>
@@ -200,11 +262,11 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
         <Ball position={[side * 0.016, 0, 0.012]} scale={[0.009, 0.024, 0.01]} mat={mat.blush} detail />
         {variant === 6 && <Ball position={[side * 0.012, -0.035, 0]} scale={[0.009, 0.011, 0.009]} mat={mat.accent} detail />}
       </group>)}
-      <Hair mat={mat.hair} accent={mat.accent} variant={variant} ponytail={ponytail} />
+      <Hair mat={mat.hair} accent={mat.accent} style={profile.hairStyle} ponytail={ponytail} />
       <group ref={eyes} position={[0, 0.018, 0.178]}>
         {[-1, 1].map(side => <group key={`eye${side}`} position={[side * 0.067, 0, 0]}>
-          <Ball scale={[0.029, 0.033, 0.013]} mat={mat.eye} detail />
-          <Ball position={[0, -0.001, 0.011]} scale={[0.018, 0.023, 0.007]} mat={mat.iris} detail />
+          <Ball scale={[profile.eyeShape === 'almond' ? .034 : .029, profile.eyeShape === 'almond' ? .026 : .033, .013]} mat={mat.eye} detail />
+          <Ball position={[0, -0.001, 0.011]} scale={[0.018, profile.eyeShape === 'almond' ? .019 : .023, .007]} mat={mat.iris} detail />
           <Ball position={[0, -0.001, 0.015]} scale={[0.01, 0.016, 0.004]} mat={mat.dark} detail />
           <Ball position={[-0.006, 0.007, 0.019]} scale={[0.005, 0.006, 0.003]} mat={mat.eye} detail />
         </group>)}
@@ -217,7 +279,7 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
       <group ref={mouth} position={[0, -0.079, 0.184]}>
         <mesh geometry={SHAPES.smile} material={mat.lip} rotation={[0, 0, Math.PI]} scale={[0.032, 0.026, 0.027]} />
       </group>
-      {[3, 5].includes(variant) && <Glasses mat={mat.metal} founder={false} />}
+      {profile.glasses && <Glasses mat={mat.metal} founder={false} />}
     </group>
     {([-1, 1] as const).map(side => <group key={`arm${side}`} ref={side === -1 ? leftArm : rightArm} position={[side * 0.194, HIP + 0.35, 0]}>
       <Ball position={[0, -0.02, 0]} scale={[0.059, 0.068, 0.058]} mat={mat.clothing} detail />
@@ -242,6 +304,11 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
             <mesh geometry={SHAPES.cylinder} material={material('#71523F', 'wood')} position={[0, 0.046, 0]} scale={[0.035, 0.002, 0.035]} />
             <mesh geometry={SHAPES.ring} material={material(PALETTE.cream, 'ceramic')} position={[0.045, 0, 0]} rotation={[0, Math.PI / 2, 0]} scale={[0.029, 0.029, 0.029]} />
           </group>
+          <group ref={waterGlass} position={[.02,-FOREARM-.017,.07]} rotation={[Math.PI/2,0,0]} visible={false}>
+            <mesh geometry={SHAPES.cylinder} material={material('#D1E5EB','ceramic',.35)} scale={[.041,.095,.041]} />
+            <mesh geometry={SHAPES.cylinder} material={material('#A3D0E3','ceramic',.72)} position={[0,-.008,0]} scale={[.035,.072,.035]} />
+            <mesh geometry={SHAPES.ring} material={material('#E4F2F5','ceramic',.75)} position={[0,.048,0]} rotation={[Math.PI/2,0,0]} scale={[.039,.039,.039]} />
+          </group>
           <group ref={spoon} position={[0, -FOREARM - 0.055, 0.045]} visible={false}>
             <SoftBox scale={[0.01, 0.096, 0.009]} mat={material('#BAC6CF', 'trim')} />
             <Ball position={[0, -0.055, 0]} scale={[0.017, 0.025, 0.005]} mat={material('#BAC6CF', 'trim')} detail />
@@ -262,9 +329,11 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
         <Ball scale={[0.053, 0.049, 0.052]} mat={mat.trousers} detail />
         <Limb position={[0, -SHIN / 2, 0]} radius={0.055} length={SHIN} mat={mat.trousers} />
         <SoftBox position={[0, -SHIN + 0.016, 0]} scale={[0.116, 0.042, 0.11]} mat={mat.trousers} />
-        <SoftBox position={[0, -SHIN - 0.023, 0.043]} scale={[0.134, 0.086, 0.216]} mat={mat.shoe} />
-        <SoftBox position={[0, -SHIN - 0.06, 0.043]} scale={[0.139, 0.024, 0.22]} mat={mat.sole} />
-        <SoftBox position={[0, -SHIN + 0.019, 0.06]} scale={[0.087, 0.01, 0.05]} mat={mat.shirt} />
+        <group ref={side === -1 ? leftFoot : rightFoot} position={[0,-SHIN,0]}>
+          <SoftBox position={[0, -.023, .043]} scale={[.134, .086, .216]} mat={mat.shoe} />
+          <SoftBox position={[0, -.06, .043]} scale={[.139, .024, .22]} mat={mat.sole} />
+          <SoftBox position={[0, .019, .06]} scale={[.087, .01, .05]} mat={mat.shirt} />
+        </group>
       </group>
     </group>)}
     <group ref={tablet} position={[0, HIP + 0.07, 0.305]} rotation={[-0.38, 0, 0]} visible={false}>
@@ -279,6 +348,25 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
         {[0, 1, 2].map(line => <SoftBox key={line} position={[0, 0.041 - line * 0.025, 0.022]} scale={[0.099, 0.003, 0.002]} mat={material('#B4B5A8')} />)}
       </group>)}
     </group>
+    <group ref={tray} position={[0,.965,.44]} visible={false}>
+      <SoftBox scale={[.56,.027,.32]} mat={material('#B9C9D0','trim')} />
+      {[-1,1].map(side => <group key={side} position={[side*.145,.055,0]}>
+        <mesh geometry={SHAPES.cylinder} material={material(PALETTE.cream,'ceramic')} scale={[.048,.083,.048]} />
+        <mesh geometry={SHAPES.cylinder} material={material('#765846')} position={[0,.043,0]} scale={[.039,.003,.039]} />
+        <mesh geometry={SHAPES.ring} material={material(PALETTE.cream,'ceramic')} position={[side*.048,0,0]} rotation={[0,Math.PI/2,0]} scale={[.029,.029,.029]} />
+      </group>)}
+      {[-1,1].map(side => <SoftBox key={side} position={[side*.27,.032,0]} scale={[.025,.045,.23]} mat={material('#7D949E','trim')} />)}
+    </group>
+    <group ref={broom} position={[.14,0,.43]} visible={false}>
+      <mesh geometry={SHAPES.cylinder} material={material(PALETTE.wood)} position={[0,.55,0]} scale={[.014,1.04,.014]} />
+      <SoftBox position={[0,.045,0]} scale={[.31,.056,.13]} mat={material(PALETTE.teal)} />
+      <SoftBox position={[0,.013,0]} scale={[.3,.025,.12]} mat={material('#DDD3AD')} />
+    </group>
+    <group ref={phone} position={[0, HIP+.12,.35]} rotation={[-.62,0,0]} visible={false}>
+      <SoftBox scale={[.095,.146,.018]} mat={mat.dark} />
+      <SoftBox position={[0,0,.012]} scale={[.078,.12,.007]} mat={material(PALETTE.sky,'ceramic')} />
+      <SoftBox position={[0,.025,.017]} scale={[.048,.008,.002]} mat={mat.shirt} />
+    </group>
   </group>;
 }
 
@@ -290,19 +378,39 @@ function armTargets(state: Pose, seated: boolean, t: number, subtle: number) {
     leftShoulder = -cycle * 0.24 * subtle; rightShoulder = cycle * 0.24 * subtle;
     leftElbow = rightElbow = -0.17;
   } else if (state === 'work') {
-    leftShoulder = rightShoulder = seated ? -0.9 : -0.67;
-    leftElbow = (seated ? -0.62 : -0.81) + Math.sin(t * 7.3) * 0.025 * subtle;
-    rightElbow = (seated ? -0.62 : -0.81) + Math.sin(t * 6.6 + 1.4) * 0.025 * subtle;
+    const contact = solveArmContact(seated ? SEATED_HIP + .35 : HIP + .35, seated ? .855 : .91, seated ? .44 : .35);
+    leftShoulder = rightShoulder = contact.shoulder;
+    leftElbow = contact.elbow + Math.sin(t * 7.3) * .018 * subtle;
+    rightElbow = contact.elbow + Math.sin(t * 6.6 + 1.4) * .018 * subtle;
     leftSpread = 0.085; rightSpread = -0.085;
+  } else if (state === 'carry' || state === 'deliver') {
+    const contact = solveArmContact(HIP+.35,.98,state === 'deliver' ? .455 : .44);
+    leftShoulder = rightShoulder = contact.shoulder; leftElbow = rightElbow = contact.elbow;
+    leftSpread = -.16; rightSpread = .16;
+  } else if (state === 'clean') {
+    const sweep = Math.sin(t*1.7)*.07*subtle;
+    leftShoulder = -.62; leftElbow = -1.15; leftSpread = .56+sweep;
+    rightShoulder = -.5; rightElbow = -.88; rightSpread = -.05+sweep;
+  } else if (state === 'brew') {
+    const press = Math.sin(t*1.6)*.009*subtle;
+    const leftContact = solveArmContact(HIP+.35,1,.34), rightContact = solveArmContact(HIP+.35,1.06+press,.4);
+    leftShoulder = leftContact.shoulder; leftElbow = leftContact.elbow;
+    rightShoulder = rightContact.shoulder; rightElbow = rightContact.elbow;
+    leftSpread = .03; rightSpread = -.03;
+  } else if (state === 'phone') {
+    const contact = solveArmContact(seated ? SEATED_HIP+.35 : HIP+.35, seated ? .76 : .92,.35);
+    leftShoulder = rightShoulder = contact.shoulder;
+    leftElbow = contact.elbow; rightElbow = contact.elbow + Math.sin(t*3.4)*.025*subtle;
+    leftSpread = .2; rightSpread = -.2;
   } else if (state === 'talk') {
     leftShoulder = -0.29 + Math.sin(t * 1.9) * 0.08 * subtle;
     rightShoulder = -0.42 + Math.sin(t * 1.5 + 1.4) * 0.13 * subtle;
     leftElbow = -0.78 + Math.sin(t * 1.4) * 0.12 * subtle;
     rightElbow = -1 + Math.sin(t * 1.7) * 0.17 * subtle;
     leftSpread = 0.16; rightSpread = -0.23;
-  } else if (state === 'coffee' || state === 'eat') {
+  } else if (state === 'coffee' || state === 'water' || state === 'eat') {
     const drink = (Math.sin(t * (state === 'eat' ? 1.1 : 0.62)) + 1) / 2;
-    rightShoulder = -0.59 - drink * (state === 'coffee' ? 0.4 : 0.1) * subtle;
+    rightShoulder = -0.59 - drink * (state === 'eat' ? .1 : .4) * subtle;
     rightElbow = -0.91 - drink * 1.04 * subtle;
     leftShoulder = state === 'eat' ? -0.7 : seated ? -0.32 : 0.02;
     leftElbow = state === 'eat' ? -0.99 : seated ? -0.7 : -0.1;
@@ -351,34 +459,32 @@ function Hand({ mat, side }: { mat: THREE.Material; side: -1 | 1 }) {
     {[0, 1, 2].map(finger => <Ball key={finger} position={[(finger - 1) * 0.022, -0.034, 0.007]} scale={[0.012, 0.022, 0.016]} mat={mat} detail />)}
   </group>;
 }
-function Hair({ mat, accent, variant, ponytail }: { mat: THREE.Material; accent: THREE.Material; variant: number; ponytail: RefObject<THREE.Group | null> }) {
+function Hair({ mat, accent, style, ponytail }: { mat: THREE.Material; accent: THREE.Material; style: HairStyle; ponytail: RefObject<THREE.Group | null> }) {
   return <>
     <mesh geometry={SHAPES.hairCap} material={mat} position={[0, 0.028, -0.014]} scale={[0.207, 0.208, 0.197]} castShadow />
-    {variant === 3 ? <>
-      {[[-0.11, 0.17, 0.01], [0, 0.205, 0.015], [0.11, 0.168, 0.02], [-0.068, 0.158, 0.126], [0.064, 0.163, 0.123]].map((position, i) => <Ball key={i} position={position as Vec3} scale={[0.081, 0.069, 0.069]} mat={mat} detail />)}
+    {style === 'curls' ? <>
+      {[-1,0,1].flatMap(row => [-1,0,1].map(column => <Ball key={`${row}:${column}`} position={[column*.125,.16+(1-Math.abs(column))*.045,row*.1]} scale={[.084,.078,.083]} mat={mat} detail />))}
+      {[-1,1].map(side => <Ball key={side} position={[side*.188,.052,-.02]} scale={[.05,.081,.066]} mat={mat} detail />)}
     </> : <>
-      <group rotation={[0, 0, variant === 5 ? -0.2 : -0.14]}>
-        <Ball position={[-0.048, variant === 7 ? 0.182 : 0.139, 0.116]} scale={[0.129, variant === 5 ? 0.082 : 0.055, 0.071]} mat={mat} />
+      <group rotation={[0, 0, style === 'quiff' ? -0.2 : -0.14]}>
+        <Ball position={[-0.048, style === 'bun' ? 0.182 : 0.139, 0.116]} scale={[0.129, style === 'quiff' ? 0.082 : 0.055, 0.071]} mat={mat} />
         <Ball position={[0.082, 0.132, 0.112]} scale={[0.089, 0.043, 0.06]} mat={mat} />
       </group>
     </>}
-    {variant === 1 && <>
+    {style === 'bob' && <>
       <Ball position={[0, -0.017, -0.088]} scale={[0.196, 0.2, 0.137]} mat={mat} />
       {[-1, 1].map(side => <Ball key={side} position={[side * 0.171, side < 0 ? -0.037 : -0.014, -0.017]} scale={[0.062, side < 0 ? 0.157 : 0.135, 0.101]} mat={mat} />)}
     </>}
-    {variant === 2 && <group ref={ponytail} position={[0, 0.055, -0.179]}>
+    {style === 'ponytail' && <group ref={ponytail} position={[0, 0.055, -0.179]}>
       <Ball position={[0, -0.131, -0.058]} scale={[0.064, 0.17, 0.067]} mat={mat} />
       <SoftBox position={[0, -0.024, -0.001]} scale={[0.113, 0.019, 0.051]} mat={accent} />
     </group>}
-    {variant === 6 && <>
+    {style === 'bun' && <>
       <Ball position={[0, -0.072, -0.196]} scale={[0.09, 0.086, 0.071]} mat={mat} />
       <Ball position={[0.052, -0.088, -0.224]} scale={[0.036, 0.015, 0.02]} mat={accent} detail />
     </>}
-    {variant === 7 && <><Ball position={[0, -0.103, -0.18]} scale={[0.082, 0.076, 0.069]} mat={mat} /><Ball position={[0.05, -0.05, -0.204]} scale={[0.03, 0.014, 0.018]} mat={accent} detail /></>}
-    {variant === 9 && <><Ball position={[0, -0.014, -0.086]} scale={[0.197, 0.188, 0.137]} mat={mat} />{[-1, 1].map(side => <Ball key={side} position={[side * 0.167, -0.028, -0.014]} scale={[0.06, 0.137, 0.094]} mat={mat} />)}</>}
-    {variant === 10 && [-1, 0, 1].flatMap((row) => [-1, 0, 1].map((column) => <Ball key={`${row}${column}`} position={[column * .12, .135 + (1 - Math.abs(column)) * .04, row * .09]} scale={[.08, .067, .075]} mat={mat} detail />))}
-    {variant === 4 && [-1, 0, 1].map(i => <Ball key={i} position={[i * 0.066, 0.171, 0.034]} scale={[0.077, 0.061, 0.098]} mat={mat} detail />)}
-    {(variant === 0 || variant === 5 || variant === 8 || variant === 9) && [-1, 1].map(side => <Ball key={side} position={[side * 0.171, 0.066, -0.013]} scale={[0.035, 0.088, 0.067]} mat={mat} detail />)}
+    {style === 'textured' && [-1, 0, 1].map(i => <Ball key={i} position={[i * 0.066, 0.171, 0.034]} scale={[0.077, 0.061, 0.098]} mat={mat} detail />)}
+    {(style === 'sidepart' || style === 'quiff' || style === 'textured') && [-1, 1].map(side => <Ball key={side} position={[side * 0.171, 0.066, -0.013]} scale={[0.035, 0.088, 0.067]} mat={mat} detail />)}
   </>;
 }
 function Glasses({ mat, founder }: { mat: THREE.Material; founder: boolean }) {
