@@ -29,7 +29,7 @@ export function OfficeLighting({ minute, simulation, quality = 'high' }: { minut
 }
 type Props = { room: Room; simulation: Simulation; speed: number; reducedMotion: boolean; avatar: RefObject<Point>; avatarActive: boolean };
 export function RoomLife({ room, simulation, speed, reducedMotion, avatar, avatarActive }: Props) {
-  const door = useRef<THREE.Group>(null), rotor = useRef<THREE.Group>(null), steam = useRef<THREE.Group>(null);
+  const leftDoor = useRef<THREE.Group>(null), rightDoor = useRef<THREE.Group>(null), rotor = useRef<THREE.Group>(null), steam = useRef<THREE.Group>(null);
   const mobile = useRef<THREE.Group>(null), clockHand = useRef<THREE.Group>(null);
   const screens = useRef<(THREE.MeshStandardMaterial | null)[]>([]), lamp = useRef<THREE.MeshStandardMaterial>(null);
   const ceiling = useRef<THREE.MeshStandardMaterial>(null), phase = useRef(room.id * 0.4);
@@ -41,9 +41,15 @@ export function RoomLife({ room, simulation, speed, reducedMotion, avatar, avata
     const t = phase.current;
     if (speed > 0 && !reducedMotion) phase.current += Math.min(delta, 0.1) * Math.min(speed, 2);
     const threshold = roomLocal(room.id, 0, room.depth / 2);
-    const sameFloor = (point: Point) => Math.abs((point[2] ?? 0) - floorHeight) < .55;
-    const near = simulation.npcs.some((n) => sameFloor(n.position) && Math.hypot(n.position[0] - threshold[0], n.position[1] - threshold[1]) < 1.25) || avatarActive && sameFloor(avatar.current) && Math.hypot(avatar.current[0] - threshold[0], avatar.current[1] - threshold[1]) < 1.25;
-    if (door.current && (speed > 0 || avatarActive)) door.current.rotation.y = reducedMotion ? (near ? -Math.PI / 2 : 0) : THREE.MathUtils.damp(door.current.rotation.y, near ? -Math.PI / 2 : 0, 9, delta);
+    const entering = (point: Point) => Math.abs((point[2] ?? 0) - floorHeight) < .55 && roomAt(point) === room.id && Math.hypot(point[0] - threshold[0], point[1] - threshold[1]) < 1.35;
+    const shouldOpen = simulation.npcs.some((n, i) => i !== 6 && n.presence !== 'offsite' && entering(n.position))
+      || simulation.clients.some((client) => client.phase !== 'offsite' && entering(client.position))
+      || avatarActive && entering(avatar.current);
+    if (leftDoor.current && rightDoor.current && (speed > 0 || avatarActive)) {
+      const distance = shouldOpen ? .76 : 0;
+      leftDoor.current.position.x = reducedMotion ? -distance : THREE.MathUtils.damp(leftDoor.current.position.x, -distance, 12, delta);
+      rightDoor.current.position.x = reducedMotion ? distance : THREE.MathUtils.damp(rightDoor.current.position.x, distance, 12, delta);
+    }
     if (lamp.current) lamp.current.emissiveIntensity = power * (0.18 + (1 - daylight(simulation.gameMinute)) * 0.7);
     if (ceiling.current) ceiling.current.emissiveIntensity = power * 0.62;
     screens.current.forEach((material, index) => {
@@ -69,13 +75,18 @@ export function RoomLife({ room, simulation, speed, reducedMotion, avatar, avata
     </group>)}
     <group position={[room.center[0], floorHeight, room.center[1]]} rotation={[0, roomRotation(room.id), 0]}>
       <group position={[-0.75, 0, room.depth / 2]} userData={{ cameraObstacle: true }}>
-        <group ref={door}>
-          <mesh position={[0.75, 1.04, 0]}><boxGeometry args={[1.46, 1.94, 0.045]} /><meshStandardMaterial color={[9, 10].includes(room.id) ? PALETTE.corporate : PALETTE.sky} transparent={![9, 10].includes(room.id)} opacity={[9, 10].includes(room.id) ? 1 : .24} roughness={[9, 10].includes(room.id) ? .9 : .48} depthWrite={[9, 10].includes(room.id)} /></mesh>
+        <group>
+          <group ref={leftDoor}>
+          <mesh position={[0.375, 1.04, 0]}><boxGeometry args={[0.72, 1.94, 0.045]} /><meshStandardMaterial color={[9, 10].includes(room.id) ? PALETTE.corporate : PALETTE.sky} transparent={![9, 10].includes(room.id)} opacity={[9, 10].includes(room.id) ? 1 : .24} roughness={[9, 10].includes(room.id) ? .9 : .48} depthWrite={[9, 10].includes(room.id)} /></mesh>
+          {[0.075, 2.03].map((y) => <mesh key={y} position={[0.375, y, 0]}><boxGeometry args={[0.74, 0.045, 0.065]} /><meshStandardMaterial color="#819eaa" metalness={0.25} roughness={0.4} /></mesh>)}
+          {[0.025, 0.725].map((x) => <mesh key={x} position={[x, 1.05, 0]}><boxGeometry args={[0.045, 2.01, 0.065]} /><meshStandardMaterial color="#819eaa" metalness={0.25} roughness={0.4} /></mesh>)}
+          </group>
+          <group ref={rightDoor}>
+          <mesh position={[1.125, 1.04, 0]}><boxGeometry args={[0.72, 1.94, 0.045]} /><meshStandardMaterial color={[9, 10].includes(room.id) ? PALETTE.corporate : PALETTE.sky} transparent={![9, 10].includes(room.id)} opacity={[9, 10].includes(room.id) ? 1 : .24} roughness={[9, 10].includes(room.id) ? .9 : .48} depthWrite={[9, 10].includes(room.id)} /></mesh>
+          {[0.075, 2.03].map((y) => <mesh key={y} position={[1.125, y, 0]}><boxGeometry args={[0.74, 0.045, 0.065]} /><meshStandardMaterial color="#819eaa" metalness={0.25} roughness={0.4} /></mesh>)}
+          {[0.775, 1.475].map((x) => <mesh key={x} position={[x, 1.05, 0]}><boxGeometry args={[0.045, 2.01, 0.065]} /><meshStandardMaterial color="#819eaa" metalness={0.25} roughness={0.4} /></mesh>)}
+          </group>
           {[9, 10].includes(room.id) && <group position={[.75, 1.35, .03]}><mesh><boxGeometry args={[.22, .28, .012]} /><meshStandardMaterial color="#ecf5fa" /></mesh><mesh position={[0, .053, .012]}><circleGeometry args={[.034, 12]} /><meshStandardMaterial color="#406785" /></mesh><mesh position={[0, -.037, .012]}><boxGeometry args={[.055, .103, .009]} /><meshStandardMaterial color="#406785" /></mesh></group>}
-          {[0.075, 2.03].map((y) => <mesh key={y} position={[0.75, y, 0]}><boxGeometry args={[1.49, 0.045, 0.065]} /><meshStandardMaterial color="#819eaa" metalness={0.25} roughness={0.4} /></mesh>)}
-          {[0.025, 1.475].map((x) => <mesh key={x} position={[x, 1.05, 0]}><boxGeometry args={[0.045, 2.01, 0.065]} /><meshStandardMaterial color="#819eaa" metalness={0.25} roughness={0.4} /></mesh>)}
-          <mesh position={[1.31, 1.02, 0.056]}><boxGeometry args={[0.025, 0.26, 0.035]} /><meshStandardMaterial color="#ba9c71" metalness={0.3} /></mesh>
-          <mesh position={[0.75, 0.85, 0.029]}><boxGeometry args={[1.43, 0.045, 0.01]} /><meshStandardMaterial color="#e7e8dc" /></mesh>
         </group>
       </group>
       {![9, 10].includes(room.id) && <group position={[-room.width / 2 + .3, 0, -room.depth / 2 + .55]}>

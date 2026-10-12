@@ -6,9 +6,9 @@ import * as THREE from 'three';
 
 import { rooms, staff, taskLabels, STAFF_WORKERS, FLOOR_HEIGHT } from './worldData';
 import type { Room, Staff } from './worldData';
-import { moveAvatar, roomAt, elevation, floorOf, onStairs, pointDistance } from './navigation';
+import { moveAvatar, findPath, moveAlong, nearestWalkable, roomAt, elevation, floorOf, onStairs, pointDistance } from './navigation';
 import type { Point } from './navigation';
-import { loadGame, stepSimulation, assignActivity, greet, activityLabels, SAVE_KEY, weekdayName, officeOpen, seatedAt, meetingDialogue, schedule, npcPose, routineDialogue, computerBroken } from './simulation';
+import { loadGame, stepSimulation, assignActivity, greet, joinClientMeeting, recordOwnerAttendance, setOwnerRoom, absoluteMinute, activityLabels, SAVE_KEY, weekdayName, officeOpen, seatedAt, meetingDialogue, schedule, npcPose, routineDialogue, computerBroken } from './simulation';
 import type { SaveData, Simulation, NpcState } from './simulation';
 import { requestInteraction, cancelInteraction, encounterFor, interactionLabels, interactionDuration, dialogueFor, bondKey, bondLabel } from './social';
 import type { InteractionKind } from './social';
@@ -17,11 +17,12 @@ import type { Pose } from './CharacterRig';
 import { RoomLife, OfficeLighting, daylight } from './RoomLife';
 import { SpeechBubble } from './SpeechBubble';
 import { OfficeFurnishings, OfficeEntrance, OfficeLandscape } from './OfficeArchitecture';
-import { arrivalMinute, workSeat, desks, RECEPTION_POST, roomLocal } from './officeLayout';
+import { arrivalMinute, workSeat, desks, RECEPTION_POST, ATTENDANCE_POINT, ownerDeskSeat, founderMeetingSeat, clientMeetingSeat, meetingSeat, lunchSeat, pantryDrinkPoint, toiletPoint, roomLocal } from './officeLayout';
 import { BuildingShell } from './BuildingShell';
 import type { FloorView } from './BuildingShell';
 import { BRAND, GRAPHICS, PALETTE } from './artDirection';
 import type { GraphicsQuality } from './artDirection';
+import { characterProfile } from './characterProfiles';
 
 const VisualStudio = lazy(() => import('./VisualStudio'));
 
@@ -31,7 +32,10 @@ function formatTime(minutes: number) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
-const dutyLabels: Record<string, string> = { private: 'Diskusi proyek bersama Manager / Founder', inspect: 'Memeriksa pekerjaan tim', repair: 'Memperbaiki komputer', read: 'Membaca di Library', toilet: 'Menggunakan WC', drink: 'Membuat minuman', cook: 'Memasak di Pantry', hr: 'Menyusun dokumen HRD' };
+const dutyLabels: Record<string, string> = { private: 'Diskusi proyek dengan Founder', client: 'Menemui client', inspect: 'Memeriksa pekerjaan tim', repair: 'Memperbaiki komputer', read: 'Membaca di Library', toilet: 'Menggunakan WC', drink: 'Membuat minuman', cook: 'Memasak di Pantry', hr: 'Konsultasi / mengurus HRD' };
+type PlayerActionKind = 'work'|'meeting'|'meal'|'drink'|'toilet'|'attendance'|'client'|'sofa'|'atlas'|'consult';
+type PlayerAction = { id:number; kind:PlayerActionKind; goal:Point; pose:Pose; rotation:number; duration:number; phase:'travel'|'active'; startedAt:number; targetId?:number };
+const PLAYER_ACTION_LABELS:Record<PlayerActionKind,string>={work:'Bekerja di meja founder',meeting:'Mengikuti rapat',meal:'Makan bersama di pantry',drink:'Mengambil minum',toilet:'Menggunakan WC',attendance:'Mengisi absensi',client:'Bertemu client',sofa:'Duduk di sofa founder',atlas:'Diskusi dengan ATLAS',consult:'Konsultasi dengan Felin'};
 function staffStatus(simulation: Simulation, index: number): string {
   const npc = simulation.npcs[index], destination = rooms[npc.destination] ?? rooms[staff[index].roomId];
   if (npc.presence === 'offsite') return 'Di luar · datang ' + formatTime(arrivalMinute(index));
@@ -59,6 +63,7 @@ function App() {
   const [simulation, setSimulation] = useState(initial.simulation);
   const [mobilePanel, setMobilePanel] = useState<'map' | 'team' | null>(null);
   const [selectedNpc, setSelectedNpc] = useState<number | null>(null);
+  const [playerAction, setPlayerAction] = useState<PlayerAction | null>(null);
   const [npcTab, setNpcTab] = useState<'status' | 'social'>('status');
   const [partner, setPartner] = useState(1);
   const [interactionKind, setInteractionKind] = useState<InteractionKind>('chat');
@@ -71,6 +76,7 @@ function App() {
   });
   const [reducedMotion, setReducedMotion] = useState(() => initial.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const avatarGesture = useRef(0);
+  const nextPlayerAction = useRef(1);
   const [savedAt, setSavedAt] = useState(initial.savedAt);
   const [toast, setToast] = useState('');
   const [saveError, setSaveError] = useState(false);
@@ -85,6 +91,8 @@ function App() {
   const currentEncounter = selectedNpc === null ? undefined : encounterFor(simulation, selectedNpc);
   const partnerBusy = encounterFor(simulation, partner);
   const nearby = npcs.findIndex((npc) => npc.presence === 'inside' && npc.duty?.kind !== 'toilet' && pointDistance(npc.position, avatarPosition.current) < 1.8);
+  const clientNearby = simulation.clients.find((client) => client.phase === 'meeting' && client.target !== 'atlas' && !client.ownerJoined && pointDistance(client.position, avatarPosition.current) < 2.7);
+  const atlasWaiting = npcs[0]?.duty?.kind === 'private' && avatarRoom === 3;
   const peopleInside = npcs.filter(n => n.presence !== 'offsite' && n.presence !== 'leaving').length;
   const completedRoutines = Object.values(simulation.completedDuties).reduce((total, count) => total + count, 0);
   const meetingActive = ['gathering','discussing'].includes(simulation.meeting.phase);
@@ -139,6 +147,25 @@ function App() {
     else if (mode === 'avatar') { setSelectedRoom(roomAt(avatarPosition.current) ?? (currentFloor === 0 ? 1 : 2)); setFloorView((current) => current === 'all' ? current : currentFloor); }
   };
   const inspectNpc = (index: number) => { setMobilePanel(null); setShowMoments(false); setSelectedNpc(index); setPartner(STAFF_WORKERS.find((other) => other !== index) ?? 0); focusRoom(roomAt(npcs[index].position) ?? staff[index].roomId); };
+  const beginPlayerAction = (kind:PlayerActionKind, goal:Point, pose:Pose, duration=0, targetId?:number, rotation=0) => {
+    if(speed===0)return;
+    setPlayerAction({id:nextPlayerAction.current++,kind,goal:nearestWalkable(goal),pose,rotation,duration,phase:'travel',startedAt:0,targetId});
+    touchKeys.current.clear();
+  };
+  const completePlayerArrival = (id:number) => {
+    const action=playerAction;
+    if(!action||action.id!==id||action.phase!=='travel')return;
+    if(action.kind==='attendance')setSimulation(current=>recordOwnerAttendance(current,current.ownerCheckedIn?'out':'in'));
+    if(action.kind==='client'&&action.targetId!==undefined)setSimulation(current=>joinClientMeeting(current,action.targetId!));
+    if(action.kind==='consult')setToast('Felin siap mendengarkan rencana pengembanganmu.');
+    setPlayerAction(current=>current?.id===id?{...current,phase:'active',startedAt:absoluteMinute(simulation)}:current);
+  };
+  useEffect(()=>{
+    if(!playerAction||playerAction.phase!=='active')return;
+    if(playerAction.duration>0&&absoluteMinute(simulation)-playerAction.startedAt>=playerAction.duration){setPlayerAction(null);return;}
+    if(playerAction.kind==='client'&&playerAction.targetId!==undefined&&simulation.clients.find(client=>client.id===playerAction.targetId)?.phase==='leaving')setPlayerAction(null);
+    if(playerAction.kind==='meeting'&&simulation.meeting.phase==='done')setPlayerAction(null);
+  },[simulation.gameDay,simulation.gameMinute,simulation.meeting.phase,simulation.clients,playerAction]);
   const greetNearby = () => {
     if (nearby < 0 || speed === 0 || Date.now() < greetReadyAt) return;
     setSimulation((current) => greet(current, nearby));
@@ -148,11 +175,27 @@ function App() {
   };
   useEffect(() => {
     const interact = (event: KeyboardEvent) => {
-      if (!showStudio && mode === 'avatar' && event.code === 'KeyE' && !event.repeat && !(event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName))) greetNearby();
+      if (showStudio || mode !== 'avatar' || event.repeat || event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+      if (event.code === 'KeyF' && avatarRoom === 3) {
+        event.preventDefault();
+        beginPlayerAction('work', ownerDeskSeat.position, 'work', 0, undefined, ownerDeskSeat.rotation);
+        return;
+      }
+      if (event.code !== 'KeyE') return;
+      event.preventDefault();
+      if (playerAction) { setPlayerAction(null); return; }
+      if (nearby === 6) { beginPlayerAction('attendance', ATTENDANCE_POINT, 'sign', 2, undefined, Math.PI); return; }
+      if (clientNearby) { beginPlayerAction('client', clientMeetingSeat(0).position, 'talk', 8, clientNearby.id, clientMeetingSeat(0).rotation); return; }
+      if (avatarRoom === 2 && meetingActive) { beginPlayerAction('meeting', meetingSeat(6).position, 'talk', Math.max(1, simulation.meeting.duration - simulation.meeting.elapsed), undefined, meetingSeat(6).rotation); return; }
+      if (atlasWaiting) { beginPlayerAction('atlas', founderMeetingSeat(0).position, 'talk', 12, undefined, founderMeetingSeat(0).rotation); return; }
+      if (nearby === 7) { beginPlayerAction('consult', avatarPosition.current, 'talk', 6); return; }
+      if (avatarRoom === 5) { beginPlayerAction('meal', lunchSeat(6).position, 'eat', 18, undefined, lunchSeat(6).rotation); return; }
+      if (avatarRoom === 9 || avatarRoom === 10) { beginPlayerAction('toilet', toiletPoint(avatarRoom), 'toilet', 5); return; }
+      greetNearby();
     };
     window.addEventListener('keydown', interact);
     return () => window.removeEventListener('keydown', interact);
-  });
+  }, [showStudio, mode, avatarRoom, playerAction, nearby, clientNearby, meetingActive, atlasWaiting, simulation.meeting.duration, simulation.meeting.elapsed, greetNearby, beginPlayerAction]);
 
 
   return (
@@ -162,7 +205,7 @@ function App() {
           <color attach="background" args={[daylight(gameMinute) > 0.2 ? '#DFEAF4' : '#91A9C4']} />
           <fog attach="fog" args={[daylight(gameMinute) > 0.2 ? '#DFEAF4' : '#91A9C4', 48, 90]} />
           <OfficeLighting minute={gameMinute} simulation={simulation} quality={quality} />
-          <OfficeWorld selectedRoom={selectedRoom} floorView={floorView} mode={showStudio ? 'director' : mode} simulation={simulation} speed={speed} reducedMotion={reducedMotion} avatarGesture={avatarGesture} avatarPosition={avatarPosition} touchKeys={touchKeys} onAvatarRoomChange={(id) => { setAvatarRoom(id); if (id !== null) setSelectedRoom(id); }} onAvatarFloorChange={(floor) => setFloorView((current) => current === 'all' ? current : floor)} onSelectRoom={focusRoom} onSelectNpc={inspectNpc} />
+          <OfficeWorld selectedRoom={selectedRoom} floorView={floorView} mode={showStudio ? 'director' : mode} simulation={simulation} speed={speed} reducedMotion={reducedMotion} avatarGesture={avatarGesture} avatarPosition={avatarPosition} touchKeys={touchKeys} playerAction={playerAction} onPlayerArrival={completePlayerArrival} onPlayerCancel={() => setPlayerAction(null)} onAvatarRoomChange={(id) => { setAvatarRoom(id); setSimulation((current)=>setOwnerRoom(current,id)); if (id !== null) setSelectedRoom(id); }} onAvatarFloorChange={(floor) => setFloorView((current) => current === 'all' ? current : floor)} onSelectRoom={focusRoom} onSelectNpc={inspectNpc} />
           <CameraRig room={room} floorView={floorView} mode={mode} />
         </Canvas>
         <div className="world-vignette" />
@@ -173,12 +216,13 @@ function App() {
           </div>
           <div className="topbar-center"><span className={`live-dot ${officeOpen(gameMinute) ? '' : 'closed'}`} /> {speed === 0 ? 'PAUSED' : officeOpen(gameMinute) ? 'KANTOR BUKA' : 'KANTOR TUTUP'} <i>·</i> {peopleInside} / 8 DI HQ</div>
           <div className="topbar-actions">
+            <div className="credit-pill reputation-pill"><span className="coin">✧</span><span>{simulation.hqPoints}</span><small>HQ POINTS</small></div>
             <div className="credit-pill"><span className="coin">✦</span><span>{credits.toLocaleString()}</span><small>HQ CREDITS</small></div>
             <button className="save-button" onClick={saveGame} aria-label="Save locally"><span>▣</span> Save</button>
           </div>
         </header>
 
-        <nav className="compact-tools" aria-label="Office controls"><button aria-expanded={mobilePanel === 'map'} onClick={() => setMobilePanel(mobilePanel === 'map' ? null : 'map')}>⌖ Map · 11 ruang</button><button aria-expanded={mobilePanel === 'team'} onClick={() => setMobilePanel(mobilePanel === 'team' ? null : 'team')}>♙ Team · 8</button><button onClick={() => changeMode(mode === 'director' ? 'avatar' : 'director')}>{mode === 'director' ? 'Enter Avatar' : 'Director'}</button></nav>
+        <nav className="compact-tools" aria-label="Office controls"><button aria-expanded={mobilePanel === 'map'} onClick={() => setMobilePanel(mobilePanel === 'map' ? null : 'map')}>⌖ Map · 12 ruang</button><button aria-expanded={mobilePanel === 'team'} onClick={() => setMobilePanel(mobilePanel === 'team' ? null : 'team')}>♙ Team · 8</button><button onClick={() => changeMode(mode === 'director' ? 'avatar' : 'director')}>{mode === 'director' ? 'Enter Avatar' : 'Director'}</button></nav>
         <FloorControls value={floorView} onChange={chooseFloor} />
         <nav className="visual-tools" aria-label="Visual tools">
           <button onClick={() => { touchKeys.current.clear(); setShowStudio(true); }} aria-haspopup="dialog">✦ Studio visual</button>
@@ -187,7 +231,7 @@ function App() {
         </nav>
         <aside className={`left-panel ${mobilePanel === 'map' ? 'panel-open' : ''}`}>
           <div className="eyebrow">YOUR HEADQUARTERS</div>
-          <div className="panel-heading-row"><h1>Office map</h1><span className="room-count">11 ROOMS</span></div>
+          <div className="panel-heading-row"><h1>Office map</h1><span className="room-count">12 ROOMS</span></div>
           <p className="panel-subtitle">{floorView === 'all' ? 'Dua lantai · seluruh kantor' : `Lantai ${floorView + 1} · ${rooms.filter((item) => item.floor === floorView).length} ruangan`}</p>
           <div className="room-list" role="listbox" aria-label="Choose a room">
             {rooms.filter((item) => floorView === 'all' || item.floor === floorView).map((item) => (
@@ -255,7 +299,23 @@ function App() {
         </section>}
         <div className="activity-feed" aria-label="HQ activity"><span className="eyebrow">HQ MOMENTS</span><p title={simulation.events[0]}>{simulation.events[0]}</p><button aria-label={`Office stories · ${simulation.encounters.length} active interactions`} aria-expanded={showMoments} onClick={() => { setSelectedNpc(null); setShowMoments(!showMoments); }}>Cerita ↗</button></div>
         {showMoments && <section className="moments-panel" aria-label="Office stories"><header><div><span className="eyebrow">OFFICE STORIES</span><h2>Hari-hari kecil di HQ</h2></div><button aria-label="Close office stories" onClick={() => setShowMoments(false)}>×</button></header><OfficeAgenda simulation={simulation} onViewMeeting={() => { focusRoom(2); setShowMoments(false); }} /><OfficeOperations simulation={simulation} onFocus={focusRoom} /><p>{simulation.completedInteractions} kegiatan bersama selesai · {completedRoutines} rutinitas selesai</p><label className="motion-control"><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /> Kurangi animasi</label>{simulation.encounters.length === 0 && <p className="story-empty">Pilih staf → Interaksi untuk mengajak rekan ngobrol atau brainstorm. Saat berkumpul, tim juga mengobrol secara otomatis.</p>}{simulation.encounters.map((e) => <article key={e.id} className="encounter-card"><strong>{e.participants.map((i) => staff[i].name).join(' ↔ ')}</strong><p>{interactionLabels[e.kind]} · {rooms[e.roomId].name}</p><small>{e.phase === 'approach' ? 'Sedang menuju tempat pertemuan' : staff[dialogueFor(e).speaker].name + ': ' + dialogueFor(e).text}</small><progress max={interactionDuration[e.kind]} value={e.elapsed} aria-label="Conversation progress" /><button onClick={() => { focusRoom(e.roomId); setShowMoments(false); }}>Lihat di ruangan</button></article>)}<div className="relationship-heading">CATATAN HARI INI</div>{simulation.events.slice(0, 5).map((event, i) => <p className="story-event" key={i}>{event}</p>)}</section>}
-        {mode === 'avatar' && <div className="avatar-actions"><button disabled={nearby < 0 || speed === 0 || Date.now() < greetReadyAt} onClick={greetNearby}>{nearby < 0 ? 'Dekati staf untuk menyapa' : Date.now() < greetReadyAt ? 'Sudah disapa · tunggu sebentar' : 'E · Sapa ' + npcs[nearby].name}</button><div className="walk-pad" aria-label="Avatar movement">{[['w','↑'],['a','←'],['s','↓'],['d','→']].map(([key,label]) => <button key={key} aria-label={'Walk ' + key.toUpperCase()} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); touchKeys.current.add(key); }} onPointerUp={() => touchKeys.current.delete(key)} onPointerCancel={() => touchKeys.current.delete(key)} onLostPointerCapture={() => touchKeys.current.delete(key)}>{label}</button>)}</div></div>}
+        {mode === 'avatar' && <div className="avatar-actions">
+          {playerAction ? <button onClick={() => setPlayerAction(null)}>{playerAction.phase==='travel'?'Berjalan · batal':'X · Selesai: '+PLAYER_ACTION_LABELS[playerAction.kind]}</button> : <>
+            {nearby >= 0 && <button disabled={speed===0||Date.now()<greetReadyAt} onClick={greetNearby}>{Date.now()<greetReadyAt?'Sudah menyapa · tunggu':'E · Sapa '+npcs[nearby].name}</button>}
+            {nearby===6 && <button disabled={speed===0} onClick={()=>beginPlayerAction('attendance',ATTENDANCE_POINT,'sign',2,undefined,Math.PI)}>E · Absen {simulation.ownerCheckedIn?'pulang':'masuk'} dengan Amanda</button>}
+            {avatarRoom===2 && meetingActive && <button disabled={speed===0} onClick={()=>beginPlayerAction('meeting',meetingSeat(6).position,'talk',Math.max(1,simulation.meeting.duration-simulation.meeting.elapsed),undefined,meetingSeat(6).rotation)}>E · Ikut rapat</button>}
+            {avatarRoom===3 && <>
+              <button disabled={speed===0} onClick={()=>beginPlayerAction('work',ownerDeskSeat.position,'work',0,undefined,ownerDeskSeat.rotation)}>F · Bekerja di meja founder</button>
+              <button disabled={speed===0} onClick={()=>beginPlayerAction('sofa',founderMeetingSeat(0).position,'think',0,undefined,founderMeetingSeat(0).rotation)}>F · Duduk di sofa</button>
+              {atlasWaiting && <button disabled={speed===0} onClick={()=>beginPlayerAction('atlas',founderMeetingSeat(0).position,'talk',12,undefined,founderMeetingSeat(0).rotation)}>E · Diskusi dengan ATLAS</button>}
+            </>}
+            {avatarRoom===5 && <><button disabled={speed===0} onClick={()=>beginPlayerAction('meal',lunchSeat(6).position,'eat',18,undefined,lunchSeat(6).rotation)}>E · Makan di pantry</button><button disabled={speed===0} onClick={()=>beginPlayerAction('drink',pantryDrinkPoint,'coffee',4)}>E · Ambil minum</button></>}
+            {(avatarRoom===9||avatarRoom===10) && <button disabled={speed===0} onClick={()=>beginPlayerAction('toilet',toiletPoint(avatarRoom),'toilet',5)}>E · Gunakan WC</button>}
+            {clientNearby && <button disabled={speed===0} onClick={()=>beginPlayerAction('client',clientMeetingSeat(0).position,'talk',8,clientNearby.id,clientMeetingSeat(0).rotation)}>E · Bertemu {clientNearby.name}</button>}
+            {nearby===7 && <button disabled={speed===0} onClick={()=>beginPlayerAction('consult',avatarPosition.current,'talk',6)}>E · Konsultasi dengan Felin</button>}
+          </>}
+          <div className="walk-pad" aria-label="Avatar movement">{[['w','↑'],['a','←'],['s','↓'],['d','→']].map(([key,label]) => <button key={key} aria-label={'Walk ' + key.toUpperCase()} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); touchKeys.current.add(key); }} onPointerUp={() => touchKeys.current.delete(key)} onPointerCancel={() => touchKeys.current.delete(key)} onLostPointerCapture={() => touchKeys.current.delete(key)}>{label}</button>)}</div>
+        </div>}
         <div className="selected-room-tag"><span className="tag-pin">⌖</span><div><small>NOW EXPLORING</small><strong>{mode === 'avatar' ? avatarRoom === null ? onStairs(avatarPosition.current) ? 'Tangga antar lantai' : 'Koridor HQ' : rooms[avatarRoom].name : room.name}</strong></div><span className="tag-sparkle">✦</span></div>
         <div className="clock-card">
           <div className="clock-readout"><span className="sun-icon">{officeOpen(gameMinute) ? '☼' : '☾'}</span><div><strong>{formatTime(gameMinute)}</strong><small>{weekdayName(gameDay).toUpperCase()} · HARI {gameDay}</small></div></div>
@@ -265,7 +325,7 @@ function App() {
           </div>
           <button className="agenda-toggle" onClick={() => { setSelectedNpc(null); setShowMoments(!showMoments); }}>Agenda hari ini ↗</button><div className="time-caption">24 MIN REAL = 1 GAME DAY</div>
         </div>
-        <div className="camera-hint"><span>◉</span> {mode === 'director' ? 'DRAG TO ORBIT  ·  SCROLL TO ZOOM  ·  RIGHT-DRAG TO PAN' : 'WASD / ARROWS TO WALK  ·  E TO SAY HELLO'}</div>
+        <div className="camera-hint"><span>◉</span> {mode === 'director' ? 'DRAG TO ORBIT  ·  SCROLL TO ZOOM  ·  RIGHT-DRAG TO PAN' : 'WASD / ARROWS TO WALK  ·  E / F TO INTERACT'}</div>
         <div className="world-legend"><span className="legend-dot" /> COZY MINIATURE WORLD <i>·</i> BLUE / CREAM / WOOD</div>
         {toast && <div role="status" className="toast-message"><span>✓</span>{toast}</div>}
         {(savedAt || saveError) && <div role="status" className="saved-indicator">{saveError ? '⚠ Local save unavailable' : '● Autosave on · local browser'}</div>}
@@ -281,7 +341,7 @@ function OfficeAgenda({simulation,onViewMeeting}:{simulation:Simulation;onViewMe
   return <div className="office-agenda">
     <div className="agenda-heading"><strong>{weekdayName(simulation.gameDay)} · Hari {simulation.gameDay}</strong><span>{officeOpen(simulation.gameMinute)?'Kantor buka':'Kantor tutup'}</span></div>
     <div className="agenda-timeline">{[['07:00','Lampu menyala · tim datang bertahap'],['08:00','Duduk bekerja di komputer'],['12:00','Makan, minum & ngobrol di kantin'],['13:00','Kembali bekerja'],['17:00','Tim pulang · lampu mulai mati']].map(([time,label])=><div key={time}><time>{time}</time><span>{label}</span></div>)}</div>
-    <div className="daily-meeting"><strong>Rapat harian · {formatTime(meeting.start)}</strong><p>{phaseLabels[meeting.phase]} · {meeting.duration} menit diskusi</p><small>Tujuh peserta, termasuk Akbar, duduk dahulu sebelum diskusi dimulai.</small>{meeting.phase==='discussing'&&<progress max={meeting.duration} value={meeting.elapsed} aria-label="Daily meeting progress" />}<button onClick={onViewMeeting}>Lihat Meeting Room · Lantai 2 ↗</button></div>
+    <div className="daily-meeting"><strong>Rapat harian · {formatTime(meeting.start)}</strong><p>{phaseLabels[meeting.phase]} · {meeting.duration} menit diskusi</p><small>Enam anggota tim berkumpul; kursi ketujuh tersedia untuk avatar Founder.</small>{meeting.phase==='discussing'&&<progress max={meeting.duration} value={meeting.elapsed} aria-label="Daily meeting progress" />}<button onClick={onViewMeeting}>Lihat Meeting Room · Lantai 2 ↗</button></div>
     <small className="agenda-week">Senin–Minggu · Tim bekerja setiap hari</small>
   </div>;
 }
@@ -297,14 +357,14 @@ function OfficeOperations({ simulation, onFocus }: { simulation: Simulation; onF
     <div className="operations-heading"><strong>Kondisi komputer</strong><span>{issues.length ? issues.length + ' perlu diperbaiki' : 'Semua siap'}</span></div>
     {issues.map((issue) => <article className="job-row issue-row" key={issue.owner}><div><strong>{staff[issue.owner].name}</strong><span>Menunggu bantuan NEXUS</span><small>Dilaporkan pukul {formatTime(issue.reportedAt)}</small></div><button onClick={() => onFocus(staff[issue.owner].roomId)}>Lihat ↗</button></article>)}
     <div className="operations-heading"><strong>Tamu kantor</strong><span>{visitors.length} tamu</span></div>
-    {visitors.map((client) => <article className="job-row" key={client.id}><div><strong>{client.name}</strong><span>{client.phase === 'arriving' ? 'Menuju resepsionis' : client.phase === 'leaving' ? 'Pulang melalui pintu utama' : client.phase === 'served' ? 'Kunjungan selesai' : 'Disambut Amanda'}</span></div><button onClick={() => onFocus(roomAt(client.position) ?? 0)}>Lihat ↗</button></article>)}
+    {visitors.map((client) => <article className="job-row" key={client.id}><div><strong>{client.name}</strong><span>{client.phase === 'arriving' ? 'Menuju resepsionis' : client.phase === 'leaving' ? 'Pulang melalui pintu utama' : client.phase === 'meeting' ? `Menunggu · ${client.target==='owner'?'Founder':client.target==='atlas'?'ATLAS':'Founder & ATLAS'}` : client.phase === 'served' ? 'Menuju Client Meeting Room' : 'Disambut Amanda'}</span></div><button onClick={() => onFocus(roomAt(client.position) ?? (client.phase==='waiting'?0:11))}>Lihat ↗</button></article>)}
     <div className="operations-heading"><strong>Catatan resepsionis</strong><span>Absensi & tamu</span></div>
     {attendance.length ? <div className="attendance-log">{attendance.map((entry, index) => <div key={`${entry.day}-${entry.name}-${entry.kind}-${index}`}><time>{formatTime(entry.at)}<small>Hari {entry.day}</small></time><strong>{entry.name}</strong><span>{entry.kind === 'in' ? 'Masuk' : entry.kind === 'out' ? 'Pulang' : 'Tamu'}</span></div>)}</div> : <p className="operations-empty">Amanda akan mencatat kedatangan tim dan tamu di resepsionis.</p>}
   </div>;
 }
 
-type WorldProps = { selectedRoom: number; floorView: FloorView; mode: 'director' | 'avatar'; simulation: Simulation; speed: number; reducedMotion: boolean; avatarGesture: RefObject<number>; avatarPosition: RefObject<Point>; touchKeys: RefObject<Set<string>>; onAvatarRoomChange: (id: number | null) => void; onAvatarFloorChange: (floor: 0 | 1) => void; onSelectRoom: (id: number) => void; onSelectNpc: (index: number) => void };
-function OfficeWorld({ selectedRoom, floorView, mode, simulation, speed, reducedMotion, avatarGesture, avatarPosition, touchKeys, onAvatarRoomChange, onAvatarFloorChange, onSelectRoom, onSelectNpc }: WorldProps) {
+type WorldProps = { selectedRoom: number; floorView: FloorView; mode: 'director' | 'avatar'; simulation: Simulation; speed: number; reducedMotion: boolean; avatarGesture: RefObject<number>; avatarPosition: RefObject<Point>; touchKeys: RefObject<Set<string>>; playerAction:PlayerAction|null; onPlayerArrival:(id:number)=>void; onPlayerCancel:()=>void; onAvatarRoomChange: (id: number | null) => void; onAvatarFloorChange: (floor: 0 | 1) => void; onSelectRoom: (id: number) => void; onSelectNpc: (index: number) => void };
+function OfficeWorld({ selectedRoom, floorView, mode, simulation, speed, reducedMotion, avatarGesture, avatarPosition, touchKeys, playerAction, onPlayerArrival, onPlayerCancel, onAvatarRoomChange, onAvatarFloorChange, onSelectRoom, onSelectNpc }: WorldProps) {
   const visibleRooms = rooms.filter((room) => floorView === 'all' || room.floor === floorView);
   return <group>
     <BuildingShell floorView={floorView} selectedRoom={selectedRoom} onSelectRoom={onSelectRoom} />
@@ -318,7 +378,7 @@ function OfficeWorld({ selectedRoom, floorView, mode, simulation, speed, reduced
       return <group key={issue.owner} position={[desk.x, desk.y + 1.59, desk.z]}><SceneLabel text="⚠ PC" kind="npc" /></group>;
     })}
     {visibleRooms.filter((room) => [9, 10].includes(room.id)).map((room) => simulation.npcs.some((npc) => npc.duty?.kind === 'toilet' && roomAt(npc.position) === room.id) && <group key={room.id} position={[room.center[0], 1.47, room.center[1] + room.depth / 2 + .14]}><SceneLabel text="TERISI" kind="npc" /></group>)}
-    <PlayerAvatar active={mode === 'avatar'} floorView={floorView} position={avatarPosition} touchKeys={touchKeys} onRoomChange={onAvatarRoomChange} onFloorChange={onAvatarFloorChange} reducedMotion={reducedMotion} gesture={avatarGesture} />
+    <PlayerAvatar active={mode === 'avatar'} floorView={floorView} position={avatarPosition} touchKeys={touchKeys} onRoomChange={onAvatarRoomChange} onFloorChange={onAvatarFloorChange} reducedMotion={reducedMotion} gesture={avatarGesture} playerAction={playerAction} onArrival={onPlayerArrival} onCancelAction={onPlayerCancel} />
     <OfficeEntrance simulation={simulation} speed={speed} reducedMotion={reducedMotion} avatarPosition={avatarPosition} avatarActive={mode === 'avatar'} />
     <OfficeLandscape />
   </group>;
@@ -365,27 +425,30 @@ function StaffActor({ person, npc, index, visible, simulation, speed, reducedMot
 function ClientActor({ client, index, visible, simulation, speed, reducedMotion }: { client: Simulation['clients'][number]; index: number; visible: boolean; simulation: Simulation; speed: number; reducedMotion: boolean }) {
   const actor = useRef<THREE.Group>(null), origin = useRef<[number, number, number]>([client.position[0], elevation(client.position), client.position[1]]);
   const signing = simulation.reception.client && simulation.reception.person === index && simulation.reception.phase === 'service';
-  const pose: Pose = client.path.length ? 'walk' : signing ? 'sign' : client.phase === 'served' ? 'wave' : 'idle';
+  const profile=characterProfile(client.variant),seated=client.phase==='meeting'&&!client.path.length;
+  const pose: Pose = client.path.length ? 'walk' : signing ? 'sign' : client.phase === 'served' ? 'wave' : seated?client.ownerJoined?'talk':'think':'idle';
   useFrame((_, delta) => {
     if (!actor.current || speed === 0) return;
     const dx = client.position[0] - actor.current.position.x, dz = client.position[1] - actor.current.position.z;
     actor.current.position.x = THREE.MathUtils.damp(actor.current.position.x, client.position[0], 18, delta);
     actor.current.position.z = THREE.MathUtils.damp(actor.current.position.z, client.position[1], 18, delta);
-    const facing = client.path.length && Math.abs(dx) + Math.abs(dz) > .01 ? Math.atan2(dx, dz) : Math.atan2(RECEPTION_POST[0] - client.position[0], RECEPTION_POST[1] - client.position[1]);
+    const counterpart=client.target==='atlas'?clientMeetingSeat(2).position:clientMeetingSeat(0).position;
+    const facing = client.path.length && Math.abs(dx) + Math.abs(dz) > .01 ? Math.atan2(dx, dz) : seated?Math.atan2(counterpart[0]-client.position[0],counterpart[1]-client.position[1]):Math.atan2(RECEPTION_POST[0] - client.position[0], RECEPTION_POST[1] - client.position[1]);
     const angle = Math.atan2(Math.sin(facing - actor.current.rotation.y), Math.cos(facing - actor.current.rotation.y)); actor.current.rotation.y += angle * (1 - Math.exp(-10 * delta));
   });
   return <group ref={actor} position={origin.current} visible={visible && client.phase !== 'offsite'}>
-    <CharacterRig color="#8195a8" hair="#4a4342" variant={8} pose={pose} speed={speed} reducedMotion={reducedMotion} />
+    <CharacterRig color={profile.color} hair={profile.hair} variant={client.variant} pose={pose} seated={seated} speed={speed} reducedMotion={reducedMotion} />
     <group position={[0, 1.84, 0]}><SceneLabel text={`${client.name} · TAMU`} kind="npc" /></group>
-    {client.phase === 'served' && !client.path.length && <SpeechBubble name={client.name} text="Terima kasih, Amanda." color="#738ca5" />}
+    {client.phase === 'meeting' && <SpeechBubble name={client.name} text={client.ownerJoined?'Terima kasih sudah meluangkan waktu. Mari bahas kebutuhan proyeknya.':client.target==='both'?'Saya sudah menyiapkan agenda untuk Founder dan ATLAS.':client.target==='atlas'?'Saya ingin meninjau kebutuhan operasional dengan ATLAS.':'Saya menunggu Founder untuk membahas kerja sama.'} color={profile.color} compact={false} />}
   </group>;
 }
 
-function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, onFloorChange, reducedMotion, gesture }: { active: boolean; floorView: FloorView; position: RefObject<Point>; touchKeys: RefObject<Set<string>>; onRoomChange: (id: number | null) => void; onFloorChange: (floor: 0 | 1) => void; reducedMotion: boolean; gesture: RefObject<number> }) {
+function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, onFloorChange, reducedMotion, gesture, playerAction, onArrival, onCancelAction }: { active: boolean; floorView: FloorView; position: RefObject<Point>; touchKeys: RefObject<Set<string>>; onRoomChange: (id: number | null) => void; onFloorChange: (floor: 0 | 1) => void; reducedMotion: boolean; gesture: RefObject<number>; playerAction:PlayerAction|null; onArrival:(id:number)=>void; onCancelAction:()=>void }) {
   const avatar = useRef<THREE.Group>(null);
   const currentRoom = useRef(roomAt(position.current));
   const currentFloor = useRef(floorOf(position.current));
   const pose = useRef<Pose>('idle');
+  const actionPath = useRef<Point[]>([]), actionId = useRef(0), arrivalSent = useRef(false);
   const keys = useRef(new Set<string>());
   const { camera, scene } = useThree();
   const cameraBlockers = useRef<THREE.Object3D[]>([]);
@@ -397,6 +460,14 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
   const cameraTarget = useMemo(() => new THREE.Vector3(), []);
   const cameraGoal = useMemo(() => new THREE.Vector3(), []);
   const boom = useMemo(() => new THREE.Vector3(), []);
+  useEffect(()=>{
+    if(!playerAction){actionId.current=0;actionPath.current=[];arrivalSent.current=false;return;}
+    if(actionId.current===playerAction.id)return;
+    actionId.current=playerAction.id;arrivalSent.current=false;
+    const goal=nearestWalkable(playerAction.goal);
+    actionPath.current=findPath(position.current,goal);
+    if(!actionPath.current.length&&pointDistance(position.current,goal)>.18)actionPath.current=findPath(position.current,nearestWalkable(goal));
+  },[playerAction?.id,active]);
   useEffect(() => {
     const blockers: THREE.Object3D[] = [];
     scene.traverse((object) => {
@@ -434,21 +505,28 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
     camera.getWorldDirection(forward); forward.y = 0; forward.normalize();
     right.set(-forward.z, 0, forward.x);
     movement.copy(right).multiplyScalar(horizontal).addScaledVector(forward, -vertical);
-    let walking = false;
-    if (movement.lengthSq()) {
-      movement.normalize().multiplyScalar(Math.min(delta, 0.05) * 1.45);
-      const previous = position.current;
-      position.current = moveAvatar(previous, movement.x, movement.z);
-      walking = pointDistance(previous, position.current) > 0.0001;
-      const targetAngle = Math.atan2(movement.x, movement.z);
-      const angle = targetAngle - avatar.current.rotation.y;
-      avatar.current.rotation.y += Math.atan2(Math.sin(angle), Math.cos(angle)) * (1 - Math.exp(-11 * delta));
+    let walking = false, targetAngle:number|null=null;
+    if(playerAction?.phase==='travel'){
+      const previous=position.current,moved=moveAlong(previous,actionPath.current,Math.min(delta,.05)*1.22);
+      position.current=moved.position;actionPath.current=moved.path;walking=pointDistance(previous,position.current)>.0001;
+      if(walking){const next=actionPath.current[0]??playerAction.goal;targetAngle=Math.atan2(next[0]-position.current[0],next[1]-position.current[1]);}
+      if(!actionPath.current.length&&pointDistance(position.current,playerAction.goal)<.2&&!arrivalSent.current){position.current=[...playerAction.goal];arrivalSent.current=true;onArrival(playerAction.id);}
+    } else if(playerAction?.phase==='active'&&movement.lengthSq()){
+      onCancelAction();
     }
+    if(!playerAction||playerAction.phase==='active'&&movement.lengthSq()){
+      if(movement.lengthSq()){
+        movement.normalize().multiplyScalar(Math.min(delta,.05)*1.45);const previous=position.current;position.current=moveAvatar(previous,movement.x,movement.z);walking=pointDistance(previous,position.current)>.0001;
+        if(walking)targetAngle=Math.atan2(movement.x,movement.z);
+      }
+    }
+    if(targetAngle!==null){const angle=targetAngle-avatar.current.rotation.y;avatar.current.rotation.y+=Math.atan2(Math.sin(angle),Math.cos(angle))*(1-Math.exp(-11*delta));}
     gesture.current = Math.max(0, gesture.current - delta);
-    pose.current = walking ? onStairs(position.current) ? 'stairs' : 'walk' : gesture.current > 0 ? 'wave' : 'idle';
+    pose.current = playerAction?.phase==='active'?playerAction.pose:walking ? onStairs(position.current) ? 'stairs' : 'walk' : gesture.current > 0 ? 'wave' : 'idle';
+    if(playerAction?.phase==='active'){const angle=playerAction.rotation-avatar.current.rotation.y;avatar.current.rotation.y+=Math.atan2(Math.sin(angle),Math.cos(angle))*(1-Math.exp(-8*delta));}
     const y = elevation(position.current);
     avatar.current.position.set(position.current[0], y, position.current[1]);
-    avatar.current.visible = active && (floorView === 'all' || floorOf(position.current) === floorView || onStairs(position.current));
+    avatar.current.visible = active && (floorView === 'all' || floorOf(position.current) === floorView || onStairs(position.current)) && !(playerAction?.phase==='active'&&playerAction.kind==='toilet');
     const nextRoom = roomAt(position.current);
     if (nextRoom !== currentRoom.current) { currentRoom.current = nextRoom; onRoomChange(nextRoom); }
     const nextFloor = floorOf(position.current); if (nextFloor !== currentFloor.current) { currentFloor.current = nextFloor; onFloorChange(nextFloor); }
@@ -476,10 +554,11 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
     const perspective = camera as THREE.PerspectiveCamera;
     if (Math.abs(perspective.fov - 46) > .01) { perspective.fov = THREE.MathUtils.damp(perspective.fov, 46, 6, delta); perspective.near = .08; perspective.updateProjectionMatrix(); }
   });
+  const seated=!!playerAction&&playerAction.phase==='active'&&['work','meeting','meal','client','sofa','atlas'].includes(playerAction.kind);
   return <group ref={avatar} position={[position.current[0], elevation(position.current), position.current[1]]} visible={active}>
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.15, 0]}><ringGeometry args={[0.32, 0.4, 32]} /><meshBasicMaterial color="#628ea0" /></mesh>
-    <CharacterRig color={PALETTE.corporate} hair="#394c5b" pose={pose} speed={active ? 1 : 0} reducedMotion={reducedMotion} expression={gesture.current > 0 ? 'happy' : 'neutral'} />
-    <group position={[0, 1.88, 0]}><SceneLabel text="YOU" kind="player" /></group>
+    <CharacterRig color={PALETTE.corporate} hair="#394c5b" pose={pose} seated={seated} speed={active ? 1 : 0} reducedMotion={reducedMotion} expression={gesture.current > 0||playerAction?.phase==='active'&&['talk','wave'].includes(playerAction.pose) ? 'happy' : 'neutral'} />
+    <group position={[0, seated ? 1.58 : 1.88, 0]}><SceneLabel text="FOUNDER" kind="player" /></group>
   </group>;
 }
 

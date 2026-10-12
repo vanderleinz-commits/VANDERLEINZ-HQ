@@ -46,13 +46,13 @@ Mata/alis ekspresif, rambut bermassa jelas, serta pakaian dengan tepi lembut men
 | SAGE | Rambut tersapu, rolled sleeves | Warm sand, detail teal | Hangat, santai |
 | NEXUS | Quiff, kacamata ramping | Deep teal overshirt | Fokus, sabar |
 | Amanda | Bun rendah, collar rapi, pin hangat | Sky blue uniform | Menyambut, ceria |
-| Akbar | Swept back hair, blazer lembut | Midnight, cream, logam hangat | Reflektif, terbuka |
+| Felin | Bun lembut dengan clasp, blazer lavender | Soft lavender, cream, dusty blue | Hangat, suportif, teliti |
 
 `worldData.ts` mengambil appearance staf dari profil ini. Geometri dibagi antar karakter; satu rig sendi hierarkis prosedural menggerakkan seluruh cast. Belum ada mesh skeletal clips. Ekspresi neutral/happy/focused menggunakan mata, alis, mulut, serta kedipan. Bahasa gerak dan acuan kursi ada di [ANIMATION_PLAN.md](ANIMATION_PLAN.md).
 
 ## Arsitektur dan interior
 
-Volume sederhana, sudut membulat, kayu/cream/biru, serta detail pada area yang dilihat memberi kesan miniatur yang dirancang tangan. Reception memakai counter kayu/signage/tanaman; workspace empat meja dengan jalur lega; meeting tujuh kursi dan meja sebagai fokus. Founder/Manager memakai biru lebih dalam. Pantry memakai sand/cream; server muted teal; HRD lavender; library kayu/daun; WC keramik cream/trim blue.
+Volume sederhana, sudut membulat, kayu/cream/biru, serta detail pada area yang dilihat memberi kesan miniatur yang dirancang tangan. Lobby resepsionis dan Open Workspace masing-masing memakai layout dua kali ruangan biasa; counter kayu/signage/tanaman menjaga Amanda jauh dari pintu utama. Meeting Room memiliki enam kursi tim dan satu kursi Founder; Client Meeting Room memberi ruang percakapan privat. Founder Office menempatkan meja kerja membelakangi pintu dan sofa/meja di sisi tamu. Founder adalah avatar pemilik, bukan NPC. Pantry memakai sand/cream; server muted teal; HRD Felin memakai lavender; library kayu/daun; WC keramik cream/trim blue.
 
 Bintang, lengkung langit, serta lingkaran geometris digunakan sebagai hiasan kecil pada karya dinding/signage. Setting tetap kantor yang membumi. Hindari kapal luar angkasa, neon/hologram, serta mesin futuristis dominan.
 

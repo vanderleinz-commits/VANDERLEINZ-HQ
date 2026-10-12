@@ -80,10 +80,10 @@ function castMaterials(color: string, hair: string, variant: number): Materials 
   return {
     skin: material(profile.skin, 'skin'), hair: material(hair), clothing: material(color),
     trousers: material(profile.trousers), shirt: material(PALETTE.cream), accent: material(profile.accent, 'trim'),
-    shoe: material(variant === 4 || variant === 6 ? '#76604E' : '#35475D', 'wood'), sole: material('#DAD8CC'),
-    eye: material('#FFFCF6', 'skin'), iris: material(variant === 2 || variant === 3 ? '#54726B' : '#415C71', 'skin'),
+    shoe: material(variant === 4 || variant === 6 || variant === 7 || variant === 9 ? '#76604E' : '#35475D', 'wood'), sole: material('#DAD8CC'),
+    eye: material('#FFFCF6', 'skin'), iris: material(variant === 2 || variant === 3 || variant === 7 || variant === 9 ? '#54726B' : '#415C71', 'skin'),
     dark: material('#25394D', 'skin'), lip: material('#956454', 'skin'),
-    blush: material('#D7897C', 'skin', 0.2), metal: material(variant === 7 ? '#BFA276' : '#52667D', 'trim'),
+    blush: material('#D7897C', 'skin', 0.2), metal: material('#52667D', 'trim'),
   };
 }
 
@@ -101,7 +101,7 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
   const time = useRef(variant * 0.83), sitting = useRef(seated ? 1 : 0);
   const previous = useRef({ pose: '', seated, expression });
   const mat = castMaterials(color, hair, variant);
-  const feminine = variant === 1 || variant === 2 || variant === 6;
+  const feminine = variant === 1 || variant === 2 || variant === 6 || variant === 7 || variant === 10;
   const shortSleeve = variant === 4;
   const resting = RESTING_POSTURES[((Math.floor(variant) % RESTING_POSTURES.length) + RESTING_POSTURES.length) % RESTING_POSTURES.length];
 
@@ -182,7 +182,7 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
       <mesh geometry={SHAPES.torso} material={mat.clothing} scale={[feminine ? 0.93 : 1, 1, 0.72]} castShadow />
       <SoftBox position={[0, 0.122, 0.115]} scale={[0.106, 0.113, 0.019]} mat={mat.shirt} />
       {[-1, 1].map(side => <SoftBox key={`collar${side}`} position={[side * 0.038, 0.159, 0.116]} scale={[0.055, 0.054, 0.016]} rotation={[0, 0, side * 0.28]} mat={mat.shirt} />)}
-      {(variant === 0 || variant === 3 || variant === 7 || variant === 8) && <>
+      {(variant === 0 || variant === 3 || variant === 7 || variant === 8 || variant === 9 || variant === 10) && <>
         {[-1, 1].map(side => <SoftBox key={`lapel${side}`} position={[side * 0.073, 0.078, 0.12]} scale={[0.039, 0.157, 0.022]} rotation={[0, 0, side * 0.21]} mat={mat.clothing} />)}
         {[0, 1].map(button => <Ball key={`button${button}`} position={[0, -0.016 - button * 0.043, 0.121]} scale={[0.007, 0.007, 0.006]} mat={mat.accent} detail />)}
       </>}
@@ -217,8 +217,7 @@ export function CharacterRig({ color, hair, pose, speed, reducedMotion, variant 
       <group ref={mouth} position={[0, -0.079, 0.184]}>
         <mesh geometry={SHAPES.smile} material={mat.lip} rotation={[0, 0, Math.PI]} scale={[0.032, 0.026, 0.027]} />
       </group>
-      {[3, 5, 7].includes(variant) && <Glasses mat={mat.metal} founder={variant === 7} />}
-      {variant === 7 && <Ball position={[0, -0.129, 0.14]} scale={[0.096, 0.027, 0.024]} mat={material(hair, 'fabric', 0.2)} detail />}
+      {[3, 5].includes(variant) && <Glasses mat={mat.metal} founder={false} />}
     </group>
     {([-1, 1] as const).map(side => <group key={`arm${side}`} ref={side === -1 ? leftArm : rightArm} position={[side * 0.194, HIP + 0.35, 0]}>
       <Ball position={[0, -0.02, 0]} scale={[0.059, 0.068, 0.058]} mat={mat.clothing} detail />
@@ -375,8 +374,11 @@ function Hair({ mat, accent, variant, ponytail }: { mat: THREE.Material; accent:
       <Ball position={[0, -0.072, -0.196]} scale={[0.09, 0.086, 0.071]} mat={mat} />
       <Ball position={[0.052, -0.088, -0.224]} scale={[0.036, 0.015, 0.02]} mat={accent} detail />
     </>}
+    {variant === 7 && <><Ball position={[0, -0.103, -0.18]} scale={[0.082, 0.076, 0.069]} mat={mat} /><Ball position={[0.05, -0.05, -0.204]} scale={[0.03, 0.014, 0.018]} mat={accent} detail /></>}
+    {variant === 9 && <><Ball position={[0, -0.014, -0.086]} scale={[0.197, 0.188, 0.137]} mat={mat} />{[-1, 1].map(side => <Ball key={side} position={[side * 0.167, -0.028, -0.014]} scale={[0.06, 0.137, 0.094]} mat={mat} />)}</>}
+    {variant === 10 && [-1, 0, 1].flatMap((row) => [-1, 0, 1].map((column) => <Ball key={`${row}${column}`} position={[column * .12, .135 + (1 - Math.abs(column)) * .04, row * .09]} scale={[.08, .067, .075]} mat={mat} detail />))}
     {variant === 4 && [-1, 0, 1].map(i => <Ball key={i} position={[i * 0.066, 0.171, 0.034]} scale={[0.077, 0.061, 0.098]} mat={mat} detail />)}
-    {(variant === 0 || variant === 5 || variant === 7 || variant === 8) && [-1, 1].map(side => <Ball key={side} position={[side * 0.171, 0.066, -0.013]} scale={[0.035, 0.088, 0.067]} mat={mat} detail />)}
+    {(variant === 0 || variant === 5 || variant === 8 || variant === 9) && [-1, 1].map(side => <Ball key={side} position={[side * 0.171, 0.066, -0.013]} scale={[0.035, 0.088, 0.067]} mat={mat} detail />)}
   </>;
 }
 function Glasses({ mat, founder }: { mat: THREE.Material; founder: boolean }) {

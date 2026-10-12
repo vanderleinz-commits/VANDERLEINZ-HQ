@@ -6,7 +6,7 @@ import type { Room } from './worldData';
 import type { Point } from './navigation';
 import type { Simulation } from './simulation';
 import { officePower } from './simulation';
-import { desks, workSeat, meetingSeat, lunchSeat, roomRotation, librarySeat, interviewSeat, founderMeetingSeat, RECEPTION_DESK_POINT, FLOOR_HEIGHT } from './officeLayout';
+import { desks, workSeat, meetingSeat, lunchSeat, roomRotation, librarySeat, interviewSeat, clientMeetingSeat, ownerDeskPoint, ownerDeskSeat, RECEPTION_DESK_POINT, FLOOR_HEIGHT } from './officeLayout';
 import { BRAND, PALETTE } from './artDirection';
 import { RoundedBlock, SkyArtwork, FourPointStar } from './VisualPrimitives';
 import { StaticFurnitureBatch } from './StaticFurnitureBatch';
@@ -147,12 +147,21 @@ function SmallTable({ width, depth, z, reading = false }: { width: number; depth
   return <group position={[0, 0, z]}><Box position={[0, .78, 0]} size={[width, .085, depth]} color={PALETTE.woodLight} radius={.038} />{[-1, 1].flatMap((x) => [-1, 1].map((dz) => <Box key={`${x}${dz}`} position={[x * (width / 2 - .1), .43, dz * (depth / 2 - .09)]} size={[.04, .66, .04]} color={metal} />))}{[-.75, .75].map((x) => <group key={x}><Box position={[x, .831, .08]} size={[.34, .014, .29]} color={PALETTE.cream} /><Box position={[x, .843, .08]} size={[.016, .012, .29]} color={reading ? PALETTE.corporate : PALETTE.sky} />{reading && <Box position={[x - .2, .845, -.15]} size={[.19, .026, .25]} color={PALETTE.corporate} />}</group>)}</group>;
 }
 function ProjectCoffeeTable() {
-  return <group position={[1.1, 0, .65]}>
-    <Box position={[0, .65, 0]} size={[.4, .06, .55]} color="#b9cedf" radius={.025} />
-    {[-1, 1].flatMap((x) => [-1, 1].map((z) => <Box key={`${x}${z}`} position={[x * .15, .39, z * .21]} size={[.028, .49, .028]} color={metal} />))}
-    <Box position={[0, .685, 0]} size={[.22, .01, .18]} color="#edf4f8" radius={.006} />
+  return <group position={[.68, 0, -.12]}>
+    <Box position={[0, .53, 0]} size={[.82, .06, .56]} color="#b9cedf" radius={.025} />
+    {[-1, 1].flatMap((x) => [-1, 1].map((z) => <Box key={`${x}${z}`} position={[x * .34, .29, z * .21]} size={[.028, .49, .028]} color={metal} />))}
+    <Box position={[0, .565, 0]} size={[.32, .01, .23]} color="#edf4f8" radius={.006} />
     <group position={[0, .692, -.034]} rotation={[-Math.PI / 2, 0, 0]}><Sign text="PROJECT PLAN" width={.2} height={.045} background="#edf4f8" color="#587d99" /></group>
-    <Mug position={[-.06, .684, -.17]} color="#8eb3ce" /><Mug position={[.06, .684, .17]} color="#dbe9f2" />
+    <Mug position={[-.24, .56, -.18]} color="#8eb3ce" /><Mug position={[.24, .56, .18]} color="#dbe9f2" />
+  </group>;
+}
+function FounderSofa() {
+  return <group position={[.75, 0, -1.12]}>
+    <Box position={[0, .34, 0]} size={[1.92, .34, .72]} color="#6486a8" radius={.09} fabric />
+    <Box position={[0, .73, -.27]} size={[1.92, .78, .18]} color="#52779c" radius={.085} fabric />
+    {[-.89, .89].map((x) => <Box key={x} position={[x, .55, 0]} size={[.16, .48, .72]} color="#52779c" radius={.075} fabric />)}
+    {[-.43, .43].map((x, i) => <group key={x}><Box position={[x, .535, .035]} size={[.82, .15, .52]} color={i ? '#87a7c4' : '#7898b8'} radius={.065} fabric /><Box position={[x, .86, -.32]} size={[.28, .27, .09]} color={i ? PALETTE.sand : PALETTE.cream} radius={.065} fabric /></group>)}
+    {[[-.58, .19], [.58, .19]].flatMap(([x, z]) => <Box key={`${x}${z}`} position={[x, .13, z]} size={[.07, .25, .07]} color={wood} radius={.02} />)}
   </group>;
 }
 function LibraryBooks() {
@@ -177,21 +186,24 @@ export function OfficeFurnishings({ room }: { room: Room }) {
   const roomDesks = desks.filter((d) => d.roomId === room.id);
   return <group position={[0, room.floor * FLOOR_HEIGHT, 0]} userData={{ cameraObstacle: true }}><StaticFurnitureBatch>
     {roomDesks.map((d) => <group key={d.staffIndex}><ComputerDesk position={[d.x, d.z]} rotation={d.rotation} variant={d.staffIndex} /><OfficeChair {...workSeat(d.staffIndex)} color={room.id === 3 ? '#315d83' : room.id === 7 ? '#5c809e' : '#83a7c2'} /></group>)}
+    {room.id === 3 && <><ComputerDesk position={ownerDeskPoint} rotation={roomRotation(3)} variant={0} /><OfficeChair {...ownerDeskSeat} color={PALETTE.midnight} /></>}
     {room.id === 0 && <ReceptionCounter />}
     {(room.id === 2 || room.id === 5) && Array.from({ length: 7 }, (_, i) => <OfficeChair key={i} {...(room.id === 2 ? meetingSeat(i) : lunchSeat(i))} color={room.id === 2 ? '#7399b7' : '#91b2c8'} dining={room.id === 5} />)}
     {room.id === 8 && [0, 1].map((i) => <OfficeChair key={i} {...librarySeat(i)} color="#83a5be" />)}
     {room.id === 4 && [0, 1].map((i) => <OfficeChair key={i} {...interviewSeat(i)} color="#96b7cd" />)}
-    {room.id === 3 && [0, 7].map((i) => <OfficeChair key={i} {...founderMeetingSeat(i)} color="#86a8c1" />)}
+    {room.id === 3 && <FounderSofa />}
+    {room.id === 11 && Array.from({ length: 4 }, (_, i) => <OfficeChair key={i} {...clientMeetingSeat(i)} color={i < 2 ? '#8297b4' : '#96b7c1'} />)}
     <group position={[room.center[0], 0, room.center[1]]} rotation={[0, roomRotation(room.id), 0]}>
       {room.id === 0 && <><group position={[1.83, 0, .4]} rotation={[0, -Math.PI / 2, 0]}><Box position={[0, .49, 0]} size={[1.3, .22, .48]} color={PALETTE.sky} radius={.07} fabric /><Box position={[0, .76, -.18]} size={[1.3, .48, .12]} color={PALETTE.corporate} radius={.056} fabric />{[-.5, .5].map((x) => <Box key={x} position={[x, .27, 0]} size={[.04, .37, .32]} color={wood} />)}</group><group position={[1.48, 1.46, -2.32]} rotation={[0, Math.PI, 0]}><Sign text="MAKE YOURSELF AT HOME" width={1.45} height={.27} /></group></>}
       {room.id === 1 && <><Rug width={8.3} depth={3.65} color="#cbdfeb" z={.1} /><WallShelf x={3.9} z={-1.9} width={1} depth={.45} books /><group position={[-3.85, 1.53, -2.32]}><Sign text="CREATE  ·  CONNECT  ·  GROW" width={1.53} height={.25} /></group>{[-3.9, 0, 3.9].map((x) => <Box key={x} position={[x, .152, .08]} size={[.02, .005, 3.38]} color="#b7d0e1" />)}</>}
       {room.id === 2 && <><Rug width={3.7} depth={3.9} color="#cfdfeb" z={-.15} /><SharedTable /><group position={[0, 1.43, -2.32]}><Box position={[0, 0, 0]} size={[1.72, .85, .065]} color="#8da8bd" radius={.025} /><Box position={[0, 0, .04]} size={[1.6, .74, .017]} color="#e7f0f6" /><group position={[0, .24, .055]}><Sign text="TEAM IDEAS" width={1.3} height={.13} /></group>{[0, 1, 2].map((i) => <Box key={i} position={[-.47 + i * .37, -.14 + i * .07, .06]} size={[.2, .2 + i * .1, .015]} color={['#a7c5d7', '#739cb7', '#4d789d'][i]} />)}</group></>}
-      {room.id === 3 && <><Rug width={3.6} depth={2.95} color="#C5D8E5" z={.25} /><ProjectCoffeeTable /><WallShelf x={1.7} z={-1.8} width={.55} depth={.45} books /><group position={[0, 1.6, -2.32]}><Sign text="BLUE AND SPACE  /  FOUNDER" width={2.55} height={.31} background={PALETTE.midnight} color={PALETTE.sand} /></group></>}
-      {room.id === 4 && <><Rug width={3.65} depth={2.6} color="#d5e6ef" z={.3} /><SmallTable width={2.2} depth={.7} z={-.6} /><WallShelf x={-1.8} z={-1.6} width={.45} depth={1} books /><group position={[0, 1.56, -2.32]}><Sign text="PEOPLE FIRST" width={2.1} height={.29} /></group></>}
+      {room.id === 3 && <><Rug width={3.6} depth={2.95} color="#C5D8E5" z={.25} /><ProjectCoffeeTable /><WallShelf x={1.8} z={-1.8} width={.55} depth={.45} books /><group position={[-.55, 1.6, -2.32]}><Sign text="BLUE AND SPACE  /  FOUNDER" width={2.55} height={.31} background={PALETTE.midnight} color={PALETTE.sand} /></group></>}
+      {room.id === 4 && <><Rug width={3.65} depth={2.6} color="#d5e6ef" z={.3} /><SmallTable width={2.2} depth={.7} z={-.6} /><WallShelf x={-1.8} z={-1.6} width={.45} depth={1} books /><group position={[0, 1.56, -2.32]}><Sign text="FELIN  /  PEOPLE & GROWTH" width={2.7} height={.29} /></group></>}
       {room.id === 5 && <><Rug width={3.7} depth={3.6} color="#d7e5ec" z={.1} /><SharedTable dining /><KitchenCounter /></>}
       {room.id === 6 && <><Rug width={3.72} depth={1.32} color="#bdcfdf" z={.86} /><ServerRack x={-1.2} /><ServerRack x={-.35} /><group position={[-.75, 2.15, -1.3]}><Sign text="DATABASE  /  SYSTEMS" width={1.8} height={.2} background="#416b89" color="#e6f3fa" /></group></>}
       {room.id === 7 && <><Rug width={3.65} depth={2.65} color="#ccdeeb" z={.25} /><WallShelf x={1.65} z={-1.75} width={.5} depth={.65} books /><group position={[0, 1.54, -2.32]}><Sign text="OPERATIONS  /  ATLAS" width={2.25} height={.29} /></group></>}
       {room.id === 8 && <><Rug width={3.65} depth={2.8} color="#d2e1eb" z={.5} /><LibraryBooks /><SmallTable width={2.7} depth={.75} z={-.5} reading /><group position={[0, 1.62, -2.32]}><Sign text="A LITTLE SPACE TO THINK" width={2.45} height={.3} /></group></>}
+      {room.id === 11 && <><Rug width={3.65} depth={3.75} color="#d9d9e9" z={-.05} /><SharedTable /><WallShelf x={1.86} z={-1.7} width={.42} depth={.5} books /><group position={[0, 1.58, -2.32]}><Sign text="CLIENT MEETINGS" width={2.3} height={.29} /></group></>}
       {[9, 10].includes(room.id) && <><Restroom id={room.id} />{[-.8, 0, .8].flatMap((x) => [-1.8, -.9, 0, .9, 1.8].map((z) => <Box key={`${x}${z}`} position={[x, .121, z]} size={[.74, .008, .8]} color={(Math.round(z * 10) + Math.round(x * 10)) % 2 ? '#d0e2ed' : '#e5eff5'} />))}</>}
       {[0, 1, 3, 4, 7, 8].includes(room.id) && <group position={[room.width / 2 - .1, 1.15, room.id === 1 ? .1 : .85]} rotation={[0, -Math.PI / 2, 0]}><SkyArtwork position={[0, 0, 0]} width={room.id === 1 ? 1.12 : .8} height={.62} /></group>}
       {[1, 2, 3, 4, 5, 7, 8].includes(room.id) && <OfficePlant position={[-room.width / 2 + .38, .13, -room.depth / 2 + .72]} small={room.id === 8} />}
@@ -202,7 +214,7 @@ export function OfficeFurnishings({ room }: { room: Room }) {
 type EntranceProps = { simulation: Simulation; speed: number; reducedMotion: boolean; avatarPosition: RefObject<Point>; avatarActive?: boolean };
 export function OfficeEntrance({ simulation, speed, reducedMotion, avatarPosition, avatarActive = false }: EntranceProps) {
   const left = useRef<THREE.Group>(null), right = useRef<THREE.Group>(null), lamps = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
-  const threshold: Point = [-9.8, 5.72, 0];
+  const threshold: Point = [-7.3, 5.72, 0];
   useFrame((_, delta) => {
     const avatarNear = avatarActive && Math.abs(avatarPosition.current[2] ?? 0) < .5 && Math.hypot(avatarPosition.current[0] - threshold[0], avatarPosition.current[1] - threshold[1]) < 1.6;
     const near = simulation.npcs.some((n) => Math.abs(n.position[2] ?? 0) < .5 && Math.hypot(n.position[0] - threshold[0], n.position[1] - threshold[1]) < 1.65) || simulation.clients.some((client) => client.phase !== 'offsite' && Math.hypot(client.position[0] - threshold[0], client.position[1] - threshold[1]) < 1.65) || avatarNear;
@@ -212,7 +224,7 @@ export function OfficeEntrance({ simulation, speed, reducedMotion, avatarPositio
   });
   const leaf = (side: number) => <group><mesh position={[side * 0.625, 1.09, 0]}><boxGeometry args={[1.22, 2.06, 0.038]} /><meshStandardMaterial color="#b7d6dc" transparent opacity={0.24} roughness={0.12} metalness={0.08} depthWrite={false} /></mesh>{[0.045, 2.14].map((y) => <Box key={y} position={[side * 0.625, y, 0]} size={[1.24, 0.05, 0.065]} color="#70919d" metalness={0.35} />)}{[0.04, 1.22].map((x) => <Box key={x} position={[side * x, 1.09, 0]} size={[0.045, 2.1, 0.065]} color="#70919d" metalness={0.35} />)}<Box position={[side * 1.05, 1.05, 0.06]} size={[0.025, 0.4, 0.035]} color="#d1b181" metalness={0.3} /><Box position={[side * 0.625, 0.87, 0.025]} size={[1.19, 0.04, 0.012]} color="#edf0e7" /></group>;
   return <group>
-    <group position={[-9.8, 0, 5.72]}>
+    <group position={[-7.3, 0, 5.72]}>
       <Box position={[0, 0.077, 0]} size={[2.55, 0.08, 0.25]} color="#b49c7b" />
       <group ref={left} position={[-1.25, 0, 0]}>{leaf(1)}</group><group ref={right} position={[1.25, 0, 0]}>{leaf(-1)}</group>
       {[-1.3, 1.3].map((x) => <Box key={x} position={[x, 1.13, 0]} size={[0.1, 2.2, 0.16]} color="#6b8b99" metalness={0.25} />)}
@@ -225,16 +237,16 @@ export function OfficeEntrance({ simulation, speed, reducedMotion, avatarPositio
       <group position={[0, 0.12, 0.82]} rotation={[-Math.PI / 2, 0, 0]}><Sign text="A LITTLE SPACE FOR YOU" width={1.68} height={0.23} background={PALETTE.corporate} color={PALETTE.cloud} /></group>
     </group>
     <OfficePlant position={[-11.75, 0.06, 6.8]} /><OfficePlant position={[-7.88, 0.06, 6.8]} />
-    <group position={[-6.9, 0, 7.1]}><Box position={[0, 0.56, 0]} size={[0.12, 0.94, 0.12]} color="#7d9bb1" /><group position={[0, 1.25, 0]}><Sign text="07:00 – 17:00" width={1.08} height={0.29} /><group position={[0, -0.25, 0]}><Sign text="OFFICE HOURS" width={1.08} height={0.18} /></group></group></group>
+    <group position={[-4.6, 0, 7.1]}><Box position={[0, 0.56, 0]} size={[0.12, 0.94, 0.12]} color="#7d9bb1" /><group position={[0, 1.25, 0]}><Sign text="07:00 – 17:00" width={1.08} height={0.29} /><group position={[0, -0.25, 0]}><Sign text="OFFICE HOURS" width={1.08} height={0.18} /></group></group></group>
   </group>;
 }
 
 export function OfficeLandscape() {
   return <group>
-    <Box position={[-9.8, -0.03, 7.15]} size={[5.5, 0.14, 2.7]} color="#c7dbe8" radius={0.03} />
-    {[-1, 1].map((side) => <Box key={side} position={[-9.8 + side * 2.64, 0.02, 7.15]} size={[0.08, 0.12, 2.7]} color="#779bb6" />)}
-    <Box position={[-9.8, -0.14, 8.62]} size={[5.75, 0.12, 0.25]} color="#aac6d8" />
-    {[0, 1, 2, 3, 4].map((i) => <Box key={i} position={[-9.8, 0.052, 6.0 + i * 0.46]} size={[2.8, 0.011, 0.027]} color="#a2bdcf" />)}
+    <Box position={[-7.3, -0.03, 7.15]} size={[5.5, 0.14, 2.7]} color="#c7dbe8" radius={0.03} />
+    {[-1, 1].map((side) => <Box key={side} position={[-7.3 + side * 2.64, 0.02, 7.15]} size={[0.08, 0.12, 2.7]} color="#779bb6" />)}
+    <Box position={[-7.3, -0.14, 8.62]} size={[5.75, 0.12, 0.25]} color="#aac6d8" />
+    {[0, 1, 2, 3, 4].map((i) => <Box key={i} position={[-7.3, 0.052, 6.0 + i * 0.46]} size={[2.8, 0.011, 0.027]} color="#a2bdcf" />)}
     <Box position={[0, -0.15, -5.97]} size={[24.95, 0.17, 0.2]} color="#8aa9bf" />
     {[-12.48, 12.48].map((x) => <Box key={x} position={[x, -0.08, 0]} size={[0.12, 0.2, 12.0]} color="#7d9bb4" />)}
     {[[-12.8, -4.1], [12.8, -4.1], [12.8, 4.1]].map(([x, z], i) => <group key={i}><Box position={[x, -0.06, z]} size={[0.5, 0.32, 2.0]} color="#86a8be" radius={0.04} />{[-0.65, 0, 0.65].map((dz) => <OfficePlant key={dz} position={[x, 0.08, z + dz]} small />)}</group>)}

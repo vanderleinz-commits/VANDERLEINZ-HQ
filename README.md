@@ -8,7 +8,7 @@ A little office. A world of possibility.
 
 Blue and Space adalah kantor miniatur 3D dengan identitas **Premium Cozy Stylized 3D**: biru yang tenang, permukaan cream, kayu hangat, tanaman, serta karakter manusia bergaya yang ekspresif. React, TypeScript, React Three Fiber, dan Three.js menjalankan dunia dan animasi di browser. Karakter, dialog, dan kegiatan memakai aturan scripted lokal tanpa AI API.
 
-Phase 01 membentuk sistem grafis, karakter, dan animasi yang bisa dipakai ulang. Kantor dua lantai yang sudah ada menjadi tempat mengamati aset dalam situasi nyata. Sistem bisnis, perekrutan, atau gameplay baru berada di luar cakupan fase ini.
+Phase 01 membentuk sistem grafis, karakter, dan animasi yang bisa dipakai ulang melalui simulasi lokal. Pemilik menjelajahi kantor sebagai avatar, memakai furnitur, ikut absensi/rapat, makan, minum, menggunakan WC, dan menerima client. Perilaku karakter serta client berjalan dengan aturan scripted; tidak ada AI API.
 
 ## Menjalankan di komputer
 
@@ -50,11 +50,13 @@ Waktu kantor berhenti selama Studio visual dibuka. Pilihan pose/ekspresi studio 
 
 | Lantai 1 | Lantai 2 |
 | --- | --- |
-| Reception, Open Workspace, Pantry, Database Server, HRD, Library, WC 1, WC 2 | Meeting Room, Founder Office, Manager Office |
+| Lobby & Reception (2×), Open Workspace (2×), Pantry, Database Server, Library, WC 1, WC 2 | Meeting Room, Founder Office, Manager Office, HRD, Client Meeting Room |
 
-ATLAS berada di Manager Office; NOVA, LYRA, ORION, dan SAGE berbagi Open Workspace; NEXUS di Database Server; Amanda menyambut orang di Reception; Akbar berada di Founder Office. Delapan staf menggunakan satu keluarga proporsi, bahan, dan rig.
+ATLAS berada di Manager Office; NOVA, LYRA, ORION, dan SAGE berbagi Open Workspace; NEXUS di Database Server; Felin mengelola HRD; Amanda menyambut orang dari counter lobby. Avatar pemilik mewakili Founder, sehingga tidak ada NPC Akbar. Delapan karakter NPC memakai satu keluarga proporsi, bahan, dan rig.
 
-Jadwal tersedia berulang Senin–Minggu: pukul 07:00 lampu menyala dan staf datang bertahap melalui resepsionis; kerja 08:00–12:00 dan 13:00–17:00; makan siang 12:00–13:00. Setelah absen pulang, staf keluar dan kantor meredup. Rapat, percakapan, membaca, minum, dan kegiatan scripted lain menjadi konteks untuk melihat animasi.
+Client acak mendaftar ke Amanda lalu menunggu di Client Meeting Room. Mereka bisa mencari Founder, ATLAS, atau keduanya. Owner-avatar yang bergabung akan menerima client; permintaan Founder yang terlewat hingga pukul 17.00 mengurangi HQ Points. Amanda juga dapat mengambil jeda singkat ke pantry/WC, lalu kembali ke counter.
+
+Jadwal tersedia berulang Senin–Minggu: pukul 07:00 lampu menyala dan staf datang bertahap melalui resepsionis; kerja 08:00–12:00 dan 13:00–17:00; makan siang 12:00–13:00. Setelah absen pulang, staf keluar dan kantor meredup. Pintu interior berupa pintu geser otomatis yang membuka saat seseorang memasuki ruang; pintu utama merespons dari sisi masuk. Founder Office memiliki meja kerja menghadap menjauhi pintu dan area sofa-meja untuk percakapan.
 
 ## Save dan hosting
 
