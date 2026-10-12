@@ -4,16 +4,16 @@ import { createSimulation, stepSimulation, defaultSave, parseSave, assignActivit
 import { requestInteraction, cancelInteraction, bondKey, dialogueFor, interactionGoal } from '../src/social.ts';
 import type { InteractionKind } from '../src/social.ts';
 import { isWalkable, roomAt, moveAlong } from '../src/navigation.ts';
+import { quietSimulation } from './helpers.ts';
+import { STAFF_WORKERS } from '../src/worldData.ts';
+import { lunchSeat, meetingSlot } from '../src/officeLayout.ts';
 
 const advance = (sim: ReturnType<typeof createSimulation>, minutes: number) => {
   for (let i = 0; i < minutes * 5; i++) sim = stepSimulation(sim, 0.2, 1);
   return sim;
 };
 const availableOffice = (minute = 600) => {
-  const sim = createSimulation(1, minute);
-  sim.meeting.phase = 'done';
-  sim.npcs.forEach((npc) => { npc.nextSocialAt = absoluteMinute(sim) + 200; });
-  return sim;
+  return quietSimulation(createSimulation(1, minute));
 };
 
 test('paired workers reach shared chairs, exchange turns, and gain a relationship without mutating a prior frame', () => {
@@ -51,7 +51,7 @@ test('paired workers reach shared chairs, exchange turns, and gain a relationshi
 test('chat, brainstorm, and encouragement complete from different departments and have distinct benefits', () => {
   for (const kind of ['chat', 'brainstorm', 'encourage'] as InteractionKind[]) {
     const base = availableOffice(); base.npcs[1].focus = 35; base.npcs[1].energy = 40;
-    const sim = advance(requestInteraction(base, 1, 5, kind), 60);
+    const sim = advance(requestInteraction(base, 1, 5, kind), 100);
     assert.equal(sim.completedInteractions, 1, kind);
     assert.equal(sim.encounters.length, 0);
     assert.equal(sim.bonds[bondKey(1, 5)], kind === 'encourage' ? 35 : 33);
@@ -73,9 +73,20 @@ test('busy workers, Amanda, absent workers, office closure, and a daily meeting 
   assert.equal(requestInteraction(lunch, 0, 1, 'chat', 2), lunch);
 });
 
+test('Akbar can join worker conversations and has bonds with all six colleagues', () => {
+  const base = availableOffice();
+  let sim = requestInteraction(base, 7, 4, 'chat');
+  assert.equal(sim.encounters.length, 1);
+  assert.equal(Object.keys(sim.bonds).length, 21);
+  sim = advance(sim, 100);
+  assert.equal(sim.completedInteractions, 1);
+  assert.equal(sim.bonds[bondKey(7, 4)], 33);
+});
+
 test('lunch creates three pairs with distinct chair anchors and leaves Amanda at reception', () => {
   let sim = availableOffice(725);
   sim.npcs.forEach((npc) => { npc.nextSocialAt = 0; });
+  for (const index of STAFF_WORKERS) sim.npcs[index].position = lunchSeat(meetingSlot(index)).position;
   const amanda = structuredClone(sim.npcs[6].position);
   sim = stepSimulation(sim, 0.2, 1);
   assert.equal(sim.encounters.length, 3);
@@ -122,7 +133,7 @@ test('lunch end, meeting start, and office closure cancel conversations without 
   assert.equal(meeting.meeting.phase, 'gathering');
 });
 
-test('active conversations survive version 4 save/reload with participant chairs, phase, bonds, and remaining time', () => {
+test('active conversations survive version 5 save/reload with participant chairs, phase, bonds, and remaining time', () => {
   const save = defaultSave(); save.simulation = requestInteraction(availableOffice(), 0, 1, 'chat');
   for (let i = 0; i < 200 && save.simulation.encounters[0]?.phase !== 'talking'; i++) save.simulation = stepSimulation(save.simulation, 0.2, 1);
   save.simulation = advance(save.simulation, 2);
@@ -138,7 +149,7 @@ test('corrupt, duplicate, Amanda, and expired encounters are rejected on load', 
   const save = defaultSave(); save.simulation = requestInteraction(availableOffice(), 0, 1, 'chat');
   const raw = JSON.parse(JSON.stringify(save));
   raw.simulation.encounters.push({ ...raw.simulation.encounters[0], participants: [0, 2], id: 2 });
-  raw.simulation.encounters.push({ ...raw.simulation.encounters[0], participants: [3, 6], id: 3, slot: 1 });
+  raw.simulation.encounters.push({ ...raw.simulation.encounters[0], participants: [3, 6], chairs: [2, 3], id: 3, slot: 2 });
   raw.simulation.bonds['0:1'] = -999;
   const loaded = parseSave(JSON.stringify(raw));
   assert.equal(loaded.simulation.encounters.length, 1);

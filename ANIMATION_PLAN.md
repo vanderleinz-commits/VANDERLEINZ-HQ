@@ -1,78 +1,97 @@
-# Milestone 4 — Kantor dan rutinitas karakter
+# Milestone 5 — Dua lantai dan kegiatan kantor
 
-## Sistem yang sudah dibangun
+## Bangunan dan acuan aktivitas
 
-Visual mempertahankan dunia miniatur pastel blue/cream/wood, dengan desain pintu masuk utama, resepsionis, koridor, ruangan, dan furnitur yang lebih rinci. Tujuh karakter memakai rig prosedural Three.js/React Three Fiber: badan, kepala/wajah, rambut, bahu, siku, tangan/jari, pinggul, lutut, kaki, dan properti aktivitas. Amanda memiliki rambut panjang, anting, serta pakaian resepsionis; karakter lainnya memiliki variasi warna, gaya rambut, dan aksesori.
+Office world terdiri dari dua lantai dan sebelas ruangan. Lantai 1 memiliki Reception, Open Workspace berukuran dua kali ruang standar, HRD, Pantry, Database Server, Library, serta dua WC. Meeting Room, Founder Office, dan Manager Office berada di lantai 2. Tombol **Lantai 1 / Lantai 2 / Semua** serta pemilihan ruangan mengatur tampilan dan fokus kamera.
 
-Arah depan rig adalah sumbu lokal **+z**. Saat duduk, pinggul turun ke sekitar **y=0,64**, paha mengarah ke depan, lutut menekuk, dan kaki mendekati lantai. Duduk/berdiri bertransisi melalui sendi. Pose bekerja di kursi menempatkan tangan di depan tubuh untuk mengetik di meja; tablet hanya dipakai untuk pose kerja berdiri.
+`officeLayout.ts` menyatukan posisi furnitur, kursi, antrean/layanan absensi, titik perbaikan/pemeriksaan, Library, Pantry, WC, dan kedua ujung tangga. Jalur memakai koordinat horizontal dan elevasi. NPC serta Avatar naik/turun melalui kemiringan tangga secara bertahap; perubahan lantai tidak dilakukan dengan lompatan posisi.
 
-Posisi/arah kursi di `officeLayout.ts` menjadi acuan furnitur, tujuan navigasi, dan orientasi karakter. Kursi kantor berada di meja masing-masing; Meeting Room dan Canteen memiliki enam tempat duduk bersama.
+Delapan staf memakai rig prosedural lokal. ATLAS dan Akbar memiliki meja sendiri di lantai atas; NOVA, LYRA, ORION, dan SAGE berbagi Open Workspace; NEXUS menjaga Database Server; Amanda berdiri di resepsionis. Tujuh kursi Meeting Room/Pantry dipakai seluruh pekerja termasuk Akbar.
 
-| Pose | Pemicu | Gerak dan properti |
+## Rig dan pose
+
+Arah depan adalah sumbu lokal **+z**. Rig memiliki bahu/siku, pinggul/lutut, kepala/wajah, rambut, tangan/jari, dan kaki. Saat duduk, pinggul turun ke sekitar **y=0,64**, paha mengarah ke depan, lutut menekuk, serta kaki mendekati lantai. Transisi sendi dibaurkan agar perpindahan pose halus.
+
+Akbar menggunakan varian Founder: jaket navy dengan lapel, kacamata keemasan, rambut tersisir, serta bentuk wajah berbeda. Tamu memakai pakaian formal abu-abu. Amanda mempertahankan rambut panjang dan aksesori resepsionis.
+
+| Pose | Pemicu | Visual |
 | --- | --- | --- |
-| Idle | Diam / bersiap / Amanda menjaga resepsionis | Napas ringan, kepala dan kedipan |
-| Walk | Perjalanan masuk, pulang, pindah kegiatan, atau Avatar berjalan | Ayunan tangan/kaki, lutut dan rotasi arah |
-| Work | Bekerja di kursi komputer | Siku menekuk, tangan mengetik, kepala melihat monitor |
-| Talk | Giliran diskusi atau percakapan | Gestur tangan, anggukan, perhatian ke rekan |
-| Think | Mendengarkan rapat / percakapan | Tangan dekat kepala dan kepala miring |
-| Wave | Sapaan atau dukungan | Tangan terangkat dan melambai |
-| Coffee | Istirahat / variasi saat makan siang | Cangkir diangkat dan diturunkan |
-| Eat | Duduk di Canteen saat makan siang | Mangkuk dan sendok, gerak tangan ke mulut |
+| Idle | Diam, menunggu, atau Amanda siap melayani | Napas ringan dan kedipan |
+| Walk | Berjalan mengikuti jalur | Ayunan sendi dengan ritme lebih pelan |
+| Stairs | Jalur berada di tangga | Ritme lebih pelan dan lutut terangkat |
+| Work | Bekerja pada kursi komputer | Mengetik, siku menekuk, kepala melihat monitor |
+| Talk | Diskusi tim, pribadi, atau berpasangan | Gestur tangan dan anggukan |
+| Think | Mendengarkan / komputer bermasalah | Tangan dekat kepala |
+| Wave | Sapaan dan dukungan | Tangan terangkat |
+| Coffee | Minum atau variasi makan siang | Cangkir diangkat/diturunkan |
+| Eat | Duduk makan di Pantry | Mangkuk dan sendok |
+| Read | Library / dokumen HRD | Buku terbuka di tangan, kepala menunduk |
+| Inspect | ATLAS memeriksa pekerjaan | Tablet dan perhatian ke meja rekan |
+| Repair | NEXUS memperbaiki komputer | Tablet, alat, dan gerak tangan |
+| Cook | Memasak di Pantry | Panci kecil dan gerak mengaduk |
+| Sign | Absensi pekerja / buku tamu | Pena dan gerak menulis di depan tubuh |
+| Toilet | Kegiatan WC | Pose netral; karakter disembunyikan di ruang privat |
 
-Animasi sendi/dekorasi mengikuti kecepatan sampai 2x. Posisi NPC dan waktu game tetap mengikuti kecepatan 1x/2x/3x. Gelembung dialog menghadap kamera dan menampilkan teks scripted lokal.
+Kecepatan berjalan simulasi adalah 1,15 unit per menit game. Ritme pose berjalan menggunakan fase sekitar 5 radian/detik visual, tangga 4 radian/detik visual; sendi/dekorasi mengikuti kecepatan sampai 2x. Navigasi dan jam tetap mengikuti 1x/2x/3x. Ini merupakan animasi prosedural, belum sinkronisasi kaki ke setiap anak tangga atau inverse kinematics.
 
-## Rangkaian kegiatan kantor
+## Rangkaian absensi dan kegiatan harian
 
-1. Pukul 07:00 lampu menyala. Amanda masuk melalui pintu utama ke pos resepsionis.
-2. Enam pekerja datang mulai 07:06, dengan selang tujuh menit, lalu menuju departemen masing-masing.
-3. Pukul 08:00 pekerja duduk menghadap komputer. Perjalanan singkat sekitar enam menit dalam departemen memberi variasi berdiri/berjalan; setelahnya mereka kembali ke kursi.
-4. Pukul 12:00 pekerja menuju kursi Canteen untuk makan, minum, dan interaksi sederhana. Amanda tetap berdiri di resepsionis.
-5. Pukul 13:00 kegiatan makan/interaksi berakhir dan pekerja kembali ke meja.
-6. Pukul 17:00 seluruh staf berjalan keluar melalui resepsionis dan pintu utama. Lampu meredup selama 15 menit; karakter yang sudah pulang disembunyikan.
-7. Hari berikutnya pukul 07:00 rutinitas berulang. Nama hari berjalan dari Senin sampai Minggu, termasuk kerja akhir pekan.
+1. Pukul 07:00 Amanda masuk ke resepsionis dan lampu menyala.
+2. Akbar tiba 07:03; enam pekerja lainnya datang mulai 07:06 dengan selang tiga menit.
+3. Pekerja menunggu giliran, berjalan ke meja layanan, menulis absensi, dan Amanda mencatat masuk setelah layanan dua menit game. Mereka kemudian menuju meja.
+4. Pukul 08:00 pekerjaan dimulai. Kegiatan tambahan dapat membawa karakter ke departemen lain atau lantai atas/bawah.
+5. Pukul 12:00–13:00 tim beristirahat makan/minum di Pantry; rutinitas ringan juga dapat berlangsung. Amanda tetap melayani resepsionis.
+6. Pukul 13:00 tim kembali bekerja.
+7. Mulai 17:00 pekerja turun/berjalan menuju Amanda untuk absen pulang, lalu meninggalkan kantor. Amanda pulang setelah layanan absensi selesai.
+8. Lampu meredup setelah jam kerja dan tetap menyediakan penerangan minimum selama staf belum pulang. Lampu padam ketika kantor kosong; kedatangan berulang pada 07:00 berikutnya.
 
-## Rapat tim dan percakapan
+Hari berulang Senin sampai Minggu dan semuanya masih menjadi hari kerja.
 
-Satu agenda rapat dihasilkan untuk setiap hari. Jam mulai berada dalam rentang 09:00–10:10 atau 14:00–15:10; diskusi berlangsung 30, 45, atau 60 menit game. Variasi ditentukan oleh hari, sehingga penyimpanan dan pemuatan tidak mengacak ulang agenda.
+## Tugas dengan perjalanan dan durasi nyata
 
-Enam pekerja berjalan menuju kursi rapat. Saat semua telah duduk, penghitung diskusi dimulai. Giliran berbicara berganti setiap lima menit game: pembicara memberi gestur, yang lain mendengarkan. Setelah durasi penuh, tim berdiri dan kembali ke meja. Amanda tetap menjaga resepsionis. Jika peserta tidak lengkap setelah batas kedatangan 25 menit, rapat ditunda agar tim kembali bekerja.
+Tugas mengikuti urutan **berjalan → tiba → aktivitas → selesai → kembali ke jadwal**. Penghitung aktivitas dimulai setelah mencapai titik tujuan; waktu perjalanan tidak menggantikan durasi aktivitas.
 
-Interaksi berpasangan memakai tiga pasang kursi yang dipesan secara terpisah. Kedua peserta harus tiba sebelum percakapan dan penghitung durasi dimulai. Mereka berbicara bergantian setiap empat menit game. Bonus diberikan setelah selesai; pembatalan tidak memberi bonus.
+| Tugas | Peserta / tempat | Durasi aktivitas game |
+| --- | --- | --- |
+| Diskusi pribadi proyek | ATLAS + Akbar, kursi Founder Office | 15 menit setelah keduanya tiba |
+| Pemeriksaan pekerjaan | ATLAS di samping meja rekan | 6 menit |
+| Perbaikan komputer | NEXUS di meja pemilik komputer | 12 menit |
+| Membaca | Kursi Library | 12 menit |
+| Menggunakan WC | Salah satu WC yang tersedia | 6 menit |
+| Minum | Titik minuman Pantry | 4 menit |
+| Memasak | Perlengkapan Pantry | 10 menit |
+| Dokumen HRD | Kursi HRD | 8 menit |
 
-| Kegiatan | Ruangan | Durasi diskusi | Manfaat per peserta |
+Komputer yang bermasalah menghentikan pekerjaan pemiliknya sampai perbaikan selesai. Pemilik dapat mencakup Akbar, sehingga NEXUS harus benar-benar menaiki tangga sebelum memperbaiki komputer Founder. ATLAS bergantian menjalankan diskusi proyek dan pemeriksaan tim; kegiatan ringan bervariasi menurut urutan kejadian acak yang ikut disimpan.
+
+Kursi Library/WC serta beberapa titik kegiatan dipesan agar dua kegiatan yang sama tidak memakai tempat yang sama. Rapat, batas makan siang, dan penutupan kantor mengakhiri kegiatan yang belum selesai agar jadwal utama berjalan.
+
+Tamu menuju antrean resepsionis, menulis buku tamu saat dilayani Amanda, menunggu sebentar, kemudian pulang. Layanan tamu saat ini belum berlanjut ke wawancara atau pekerjaan bisnis.
+
+## Rapat dan interaksi
+
+Rapat harian dimulai pada rentang 09:00–09:30 atau 13:30–14:00, dengan diskusi 30/45/60 menit game. Agenda tetap sama untuk hari yang sama. Seluruh tujuh peserta berjalan ke kursi lantai 2; penghitung diskusi baru aktif setelah semuanya duduk. Giliran bicara berganti setiap lima menit game. Jika peserta belum lengkap setelah batas kedatangan 65 menit, rapat ditunda.
+
+Interaksi berpasangan dapat melibatkan Akbar, sementara Amanda tetap melayani resepsionis. Maksimal tiga pasangan memakai kursi berbeda. Percakapan dimulai setelah kedua peserta tiba; giliran dialog berganti setiap empat menit game.
+
+| Interaksi | Tempat | Durasi diskusi | Manfaat per peserta |
 | --- | --- | --- | --- |
-| Ngobrol santai | Canteen | 14 menit game | Sosial +18, fokus +5, kedekatan +8 |
+| Ngobrol santai | Pantry | 14 menit game | Sosial +18, fokus +5, kedekatan +8 |
 | Brainstorm | Meeting Room | 20 menit game | Fokus +12, sosial +12, kedekatan +8 |
-| Beri semangat | Canteen | 12 menit game | Energi +8, sosial +12, fokus +5, kedekatan +10 |
+| Beri semangat | Pantry | 12 menit game | Energi +8, sosial +12, fokus +5, kedekatan +10 |
 
-Rapat tim, akhir makan siang, dan tutup kantor mengakhiri percakapan yang belum selesai. Satu pekerja hanya dapat mengikuti satu interaksi berpasangan; Amanda tidak mengikuti kegiatan ini.
+Bonus diberikan saat selesai; pembatalan tidak memberikan bonus. Gelembung dialog menghadap kamera dan memakai teks scripted sesuai kegiatan serta peserta.
 
-## Ruangan dan pencahayaan
+## Pause dan penyimpanan
 
-| Area | Detail visual dan aktivitas |
-| --- | --- |
-| Pintu utama | Pintu kaca ganda, bingkai/pegangan, teras, penanda kantor, jalur masuk/pulang |
-| Reception | Meja Amanda, perlengkapan resepsionis, tempat tunggu, pintu dan jam |
-| Open Workspace | Dua meja bernama untuk ATLAS/LYRA, kursi kantor, keyboard, monitor aktif |
-| Meeting Room | Meja dan enam kursi, diskusi duduk, papan presentasi |
-| Creative Studio | Meja NOVA, perlengkapan kreatif dan ornamen bergerak |
-| Research Lab | Meja ORION dan perlengkapan riset |
-| Canteen | Meja dan enam kursi, perlengkapan makan/minum, uap minuman |
-| Server Room | Meja NEXUS, rak server, monitor sistem dan kipas |
-| Director Office | Meja SAGE, kursi, rak/dekorasi dan jam |
+- Pause membekukan NPC, kebutuhan, jam, rapat, kegiatan tambahan, absensi, tamu, percakapan, dan dekorasi.
+- Avatar/kamera tetap dapat digunakan ketika pause; pintu merespons Avatar.
+- **Kurangi animasi** mengurangi ayunan, kedipan, denyut, dan dekorasi; pose serta navigasi tetap terbaca.
+- Save versi 5 menyimpan elevasi, tugas aktif, masalah komputer, absensi/tamu, agenda, hubungan/interaksi, urutan kejadian acak, dan pilihan lantai/animasi.
+- Jalur dihitung ulang saat dimuat, termasuk dari tengah tangga. Save versi 1–4 dipindahkan ke titik aman pada tata baru sambil mempertahankan progres yang valid.
 
-Cahaya lingkungan mengikuti jam game. Lampu ruangan, cahaya kantor, dan layar menyala saat buka; mulai 17:00 lampu meredup dan padam pada 17:15. Ruangan tetap mendapat cahaya lingkungan sesuai waktu, sehingga kantor dapat terlihat ketika dieksplorasi malam hari. Pintu ruangan membuka saat karakter atau Avatar mendekat.
+## Struktur dan batas visual
 
-## Pause, aksesibilitas, dan save
+`BuildingShell.tsx` membentuk lantai/tangga; `OfficeArchitecture.tsx` membentuk furnitur dan pintu utama; `officeLayout.ts` menjadi acuan bersama. `navigation.ts` menyediakan elevasi dan perpindahan lantai. `simulation.ts` mengatur absensi, tamu, tugas, dan rapat; `social.ts` mengatur pasangan/kursi. `CharacterRig.tsx` menerima pose/status duduk dan `RoomLife.tsx` menggerakkan perangkat/dekorasi.
 
-- Pause membekukan waktu, perjalanan NPC, kebutuhan, pose, rapat, percakapan, dan dekorasi. Kamera tetap dapat digerakkan.
-- Avatar dapat berjalan ketika pause; pintu tetap merespons Avatar.
-- **Kurangi animasi** mengurangi ayunan, kedipan, denyut, dan gerak dekorasi; pose aktivitas serta navigasi tetap terlihat. Preferensi sistem menjadi nilai awal.
-- Save versi 4 menyimpan kehadiran staf, posisi, perjalanan kegiatan, hari/jam, rapat, kebutuhan, Credits, hubungan, interaksi, dan preferensi animasi.
-- Save versi 1–3 dimigrasikan ke titik aktivitas aman pada tata kantor baru, serta menambahkan Amanda dan agenda harian.
-
-## Struktur dan pengembangan berikutnya
-
-`officeLayout.ts` menyatukan acuan meja/kursi dan pintu masuk. `simulation.ts` mengatur rutinitas, kehadiran, rapat, dan pemilihan kursi; `social.ts` mengatur kegiatan berpasangan. `CharacterRig.tsx` menerima pose dan status duduk, sedangkan `RoomLife.tsx` menggerakkan perangkat/dekorasi. `SpeechBubble.tsx` menyajikan dialog.
-
-Pengembangan berikutnya dapat menambah penghindaran antar-NPC, animasi duduk Avatar, kontak tangan ke keyboard dengan inverse kinematics, variasi kegiatan sesuai tugas, serta model karakter bertulang impor. Visual saat ini merupakan geometri bergaya miniatur dan animasi prosedural; belum fotorealistis atau memakai motion capture. Kursi memakai acuan posisi tetap, dan daun pintu merupakan animasi visual.
+Model masih 3D miniatur bergaya dengan geometri prosedural. Avatar belum dapat duduk atau menggunakan furnitur; NPC belum saling menghindari. Kontak tangan/kaki belum memakai inverse kinematics, dan model belum fotorealistis, bertulang impor, atau motion capture. Pengembangan berikutnya dapat menambah kontak furnitur yang lebih presisi, penghindaran kerumunan, interaksi Avatar, serta wawancara HRD yang lengkap.

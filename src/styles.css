@@ -1,15 +1,15 @@
 :root {
   font-family: 'DM Sans', 'Segoe UI', sans-serif;
-  color: #354951;
-  background: #d6e7e8;
+  color: #2e4e6a;
+  background: #d4e5f0;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --ink: #354951;
-  --muted: #8b9998;
-  --blue: #7597a1;
-  --cream: #fbf8f1;
-  --line: rgba(105, 125, 125, 0.15);
+  --ink: #2e4e6a;
+  --muted: #7992a6;
+  --blue: #6c9abb;
+  --cream: #f4f8fc;
+  --line: rgba(92, 129, 158, 0.16);
 }
 
 * { box-sizing: border-box; }
@@ -326,3 +326,88 @@ button:disabled { opacity: .5; cursor: default; }
   .activity-feed button { white-space:nowrap; font-size:8px; }
 }
 @media(max-height:800px) and (min-width:761px) { .right-panel { top:103px; padding:17px; } .staff-row { min-height:38px; padding:6px 0; } .room-description { margin:8px 0; } .right-divider { margin:13px 0; } .room-metric { margin:10px 0; } }
+
+/* The blue office, floor controls and daily operations. */
+.topbar, .left-panel, .right-panel, .clock-card { background: #f4f8fced; border-color: #edf7ff; box-shadow: 0 9px 30px #446b8e1c; }
+.brand-mark { background: linear-gradient(145deg,#6e9bbb,#315f82); }
+.brand-name, .panel-heading-row h1, .selected-room-title h2, .npc-detail-heading h2 { color: #345a77; }
+.brand-name span, .brand-caption, .eyebrow, .selected-room-label, .staff-heading, .room-metric { color: #7291a9; }
+.panel-subtitle, .room-description, .selected-room-title small { color: #748da0; }
+.save-button { background:#487ca3; }
+.save-button:hover { background:#346889; }
+.floor-controls { position:absolute; z-index:4; left:50%; top:103px; transform:translateX(-50%); display:flex; gap:3px; padding:4px; border:1px solid #f1f8fe; border-radius:12px; background:#eaf3faed; box-shadow:0 4px 20px #52749219; backdrop-filter:blur(12px); }
+.floor-controls button { min-width:78px; min-height:30px; padding:6px 11px; border:0; border-radius:8px; color:#7190a7; background:transparent; font-size:11px; cursor:pointer; }
+.floor-controls button.active { background:#517e9f; color:#f2f8fc; box-shadow:0 2px 8px #48769624; }
+.room-row:hover, .staff-row:hover { background:#e9f2f9; }
+.room-row.is-active { background:#e1eef7; border-color:#afcbdf; box-shadow:inset 3px 0 #6d98b8; }
+.room-name-wrap strong { font-size:11px; color:#456680; }
+.room-name-wrap small { font-size:8px; color:#829aaa; }
+.room-count, .mode-switch { background:#e5eff7; color:#7292a7; }
+.mode-switch button.selected { background:#f5faff; color:#426e91; }
+.staff-row.at-room { background:#e7f1f8; border-color:#c5dbea; }
+.staff-info strong { font-size:10px; color:#42657d; }
+.staff-info small { font-size:8px; color:#7f95a5; }
+.staff-status.computer-issue i { background:#bd7886; box-shadow:0 0 0 3px #bd788621; }
+.staff-status.on-duty i { background:#709cbd; box-shadow:0 0 0 3px #709cbd20; }
+.activity-feed { top:151px; background:#f2f8fbe8; }
+.activity-feed p, .activity-feed button { color:#577b95; }
+.npc-detail, .moments-panel { background:#f4f9fdf5; border-color:#e1eff9; }
+.npc-detail p, .moments-panel > p, .encounter-card small { color:#617f94; }
+.moments-panel { width:min(390px,calc(100% - 24px)); }
+.detail-tabs button[aria-pressed="true"] { background:#dcebf6; color:#476f8d; }
+.encounter-card, .daily-meeting { background:#e4f0f7; border-color:#c7ddec; }
+.encounter-card strong { color:#487591; }
+.office-agenda { background:#edf5fa; border-color:#d0e2ee; }
+.attendance-summary { display:flex; gap:8px; margin:10px 0; }
+.attendance-summary > span { flex:1; padding:8px 10px; border-radius:8px; color:#7a94a7; background:#e7f1f8; font-size:10px; }
+.attendance-summary strong { display:block; margin-top:3px; color:#466c87; font-size:13px; }
+.issue-note { padding:9px 11px; border-radius:9px; border:1px solid #e4cbd5; background:#f7eaf0; }
+.office-operations { margin:15px 0; padding:13px; border:1px solid #d2e3ef; border-radius:13px; background:#edf5fa; }
+.operations-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:12px; margin-top:10px; border-top:1px solid #d5e4ef; }
+.operations-heading:first-child { border:0; padding-top:0; margin-top:0; }
+.operations-heading strong { color:#3f6886; font-size:11px; }
+.operations-heading > span { color:#849cad; font-size:9px; text-align:right; }
+.job-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; }
+.job-row > div { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.job-row strong { font-size:10px; color:#416b87; }
+.job-row span { font-size:10px; line-height:1.4; color:#65879e; }
+.job-row small { font-size:9px; color:#8ca2b1; }
+.job-row button { border:1px solid #c4dbe9; border-radius:7px; padding:6px 8px; background:#f6fbfe; color:#5b829e; font-size:9px; white-space:nowrap; cursor:pointer; }
+.issue-row { margin-top:7px; padding:8px; border-radius:8px; background:#f5eaf0; }
+.operations-empty { font-size:10px; line-height:1.5; color:#839cab; }
+.attendance-log { margin-top:8px; }
+.attendance-log > div { display:grid; grid-template-columns:44px 1fr auto; gap:8px; align-items:center; padding:7px 0; border-bottom:1px solid #dae7f0; }
+.attendance-log time { color:#5d809b; font-size:10px; font-weight:700; }
+.attendance-log time small { display:block; margin-top:2px; font-size:8px; font-weight:400; color:#96aaba; }
+.attendance-log strong { font-size:10px; color:#526f86; }
+.attendance-log > div > span { padding:3px 6px; border-radius:5px; background:#daeaf4; color:#6789a0; font-size:9px; }
+@media (max-width:760px) {
+  .game-shell,.world-view { min-height:100dvh; }
+  .floor-controls { top:119px; }
+  .floor-controls button { min-height:29px; min-width:75px; font-size:10px; }
+  .compact-tools { top:80px; }
+  .compact-tools button { background:#f0f7fce8; color:#517996; border-color:#e1eff8; }
+  .compact-tools button[aria-expanded="true"] { background:#d9eaf5; }
+  .activity-feed { top:163px; }
+  .left-panel.panel-open,.right-panel.panel-open { top:203px; bottom:121px; width:min(285px,calc(100vw - 20px)); }
+  .panel-open .panel-footer { display:none; }
+  .right-panel.panel-open .mode-heading,.right-panel.panel-open .right-divider,.right-panel.panel-open .selected-room-label,.right-panel.panel-open .selected-room-title,.right-panel.panel-open .room-description,.right-panel.panel-open .room-metric,.right-panel.panel-open .api-note { display:none; }
+  .right-panel.panel-open .mode-switch { margin:0 0 8px; }
+  .right-panel.panel-open .staff-list { min-height:0; flex:1; }
+  .right-panel.panel-open .staff-row { min-height:40px; }
+  .right-panel.panel-open .staff-info strong { font-size:10px; }
+  .right-panel.panel-open .staff-info small { font-size:8px; }
+  .npc-detail,.moments-panel { top:204px; max-height:calc(100dvh - 326px); }
+  .moments-panel { padding:14px; }
+  .avatar-actions { bottom:132px; }
+  .world-legend { display:none; }
+}
+@media (min-width:761px) and (max-width:1050px) {
+  .floor-controls button { min-width:68px; font-size:10px; padding:6px 8px; }
+  .activity-feed { width:260px; }
+}
+@media (max-width:440px) {
+  .compact-tools button { padding:7px 8px; font-size:9px; }
+  .activity-feed { top:163px; }
+  .activity-feed p { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+}

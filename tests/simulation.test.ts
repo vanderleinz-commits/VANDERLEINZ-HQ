@@ -1,18 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assignActivity, createSimulation, defaultSave, parseSave, schedule, stepSimulation, activityGoal } from '../src/simulation.ts';
-import { findPath, isWalkable, moveAlong, moveAvatar, roomAt, station } from '../src/navigation.ts';
+import { findPath, isWalkable, moveAlong, moveAvatar, roomAt, station, elevation } from '../src/navigation.ts';
 import { rooms } from '../src/worldData.ts';
 import { ENTRY_POINT } from '../src/officeLayout.ts';
+import { quietSimulation } from './helpers.ts';
 
 const advance = (sim: ReturnType<typeof createSimulation>, minutes: number) => {
   for (let i = 0; i < minutes; i++) sim = stepSimulation(sim, 1, 1);
   return sim;
 };
 const workingOffice = () => {
-  const sim = createSimulation(1, 600);
-  sim.meeting.phase = 'done';
-  return sim;
+  return quietSimulation(createSimulation(1, 600));
 };
 
 test('1x = one game day per 24 real minutes; 2x, 3x, and midnight rollover', () => {
@@ -39,7 +38,7 @@ test('all room standing spots connect to the new front entrance through open doo
     assert.equal(roomAt(destination), room.id);
     for (let step = 1; step < path.length; step++) {
       assert.ok(isWalkable(path[step]));
-      assert.ok(isWalkable([(path[step][0] + path[step - 1][0]) / 2, (path[step][1] + path[step - 1][1]) / 2]));
+      assert.ok(isWalkable([(path[step][0] + path[step - 1][0]) / 2, (path[step][1] + path[step - 1][1]) / 2, (elevation(path[step]) + elevation(path[step - 1])) / 2]));
     }
     assert.deepEqual(moveAlong(ENTRY_POINT, path, 1000).position, destination);
   }
@@ -69,7 +68,7 @@ test('work earns virtual credits and a manual break restores needs after arrivin
   assert.ok(after.credits > before.credits);
   assert.ok(after.npcs[0].energy < before.npcs[0].energy);
   let resting = assignActivity(after, 0, 'break');
-  resting = advance(resting, 25);
+  resting = advance(resting, 55);
   assert.equal(roomAt(resting.npcs[0].position), 5);
   assert.ok(resting.npcs[0].energy > after.npcs[0].energy);
   assert.equal(resting.npcs[0].activity, 'lunch', 'The official lunch hour takes precedence over a personal order');
@@ -86,8 +85,8 @@ test('legacy saves migrate and malformed saves recover without invalid scene dat
   assert.equal(legacy.simulation.gameDay, 4); assert.equal(legacy.simulation.credits, 2000); assert.equal(legacy.roomId, 6);
   for (const json of ['{broken', 'null', '[]', '{"roomId":99,"gameMinute":-1}', '{"version":2,"simulation":{"npcs":[null]}}']) {
     const save = parseSave(json);
-    assert.equal(save.version, 4); assert.equal(save.simulation.npcs.length, 7);
-    assert.ok(save.roomId < 8); assert.ok(isWalkable(save.avatar));
+    assert.equal(save.version, 5); assert.equal(save.simulation.npcs.length, 8);
+    assert.ok(save.roomId < 11); assert.ok(isWalkable(save.avatar));
   }
 });
 
@@ -97,7 +96,7 @@ test('save restores NPC needs, work progress, positions, orders, and avatar with
   save.avatar = station(4, 0); save.mode = 'avatar'; save.speed = 0;
   const restored = parseSave(JSON.stringify(save));
   assert.deepEqual(restored.avatar, save.avatar); assert.equal(restored.mode, 'avatar'); assert.equal(restored.speed, 0);
-  for (let index = 0; index < 7; index++) {
+  for (let index = 0; index < 8; index++) {
     const first = restored.simulation.npcs[index], second = save.simulation.npcs[index];
     assert.deepEqual(first.position, second.position);
     assert.equal(first.energy, second.energy);
