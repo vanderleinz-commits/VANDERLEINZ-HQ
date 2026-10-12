@@ -79,4 +79,10 @@ Hosting menyajikan folder build `dist`; checkout hosting memetakan proyek melalu
 
 Lihat [ART_DIRECTION.md](ART_DIRECTION.md), [ANIMATION_PLAN.md](ANIMATION_PLAN.md), serta [QA.md](QA.md) untuk aturan visual, kontrak gerakan, dan pemeriksaan.
 
-Karakter memakai geometri lokal dengan sendi hierarkis prosedural, belum model GLB dengan skeletal clips. Kontak tangan/kaki belum memakai inverse kinematics. NPC belum menghindari kerumunan secara fisik; avatar belum menggunakan furnitur. FPS studio menggambarkan sesi/perangkat saat itu, bukan jaminan semua perangkat.
+Karakter memakai geometri lokal dengan sendi hierarkis prosedural, belum model GLB dengan skeletal clips. Kontak tangan/kaki belum memakai inverse kinematics. NPC belum menghindari kerumunan secara fisik. Avatar memakai titik interaksi furnitur yang sama dengan dunia kantor. FPS studio menggambarkan sesi/perangkat saat itu, bukan jaminan semua perangkat.
+
+## Revisi stabilitas · 12 Oktober 2026
+
+Jalur masuk dan titik kursi telah diselaraskan dengan furnitur. Sofa founder berada pada koordinat ruangannya; meja HRD, kursi konsultasi, dan posisi kerja Felin tidak lagi saling menghalangi. Pantry menyediakan delapan kursi terpisah untuk tujuh karyawan dan avatar pemilik. Tamu mempunyai kursi sendiri dan tetap terlihat ketika menaiki tangga serta berada di lantai dua.
+
+Kamera avatar memakai arah kontrol tetap dan perpindahan yang diredam; perubahan jarak untuk menghindari dinding tidak mengubah arah berjalan. Label peta hanya muncul dalam Director agar pandangan avatar lebih terbuka. Pintu interior mengikuti tujuan masuk/keluar, dan Amanda melayani setelah kembali ke counter. Pengujian regresi mencakup 50 kasus; hasil lengkap dan batas pemeriksaan ada di [QA.md](QA.md).

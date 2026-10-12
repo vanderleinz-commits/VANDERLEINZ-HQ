@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSimulation, stepSimulation, officePower, officeOpen, seatedAt, weekdayName, defaultSave, parseSave, activityGoal, absoluteMinute } from '../src/simulation.ts';
-import { STAFF_WORKERS } from '../src/worldData.ts';
-import { arrivalMinute, RECEPTION_POST, ATTENDANCE_POINT, workSeat, meetingSeat, lunchSeat, meetingSlot } from '../src/officeLayout.ts';
+import { STAFF_WORKERS, MEETING_PARTICIPANTS } from '../src/worldData.ts';
+import { arrivalMinute, RECEPTION_POST, ATTENDANCE_POINT, workSeat, meetingSeat, lunchSeat, meetingSlot, lunchSlot } from '../src/officeLayout.ts';
 import { isWalkable, roomAt, floorOf, pointDistance } from '../src/navigation.ts';
 import { advance, calmOffice, quietSimulation } from './helpers.ts';
 
@@ -70,7 +70,7 @@ test('12:00 sends workers across both floors to the pantry and 13:00 sends them 
   for (const index of STAFF_WORKERS) assert.deepEqual(seatedAt(sim, index)?.position, workSeat(index).position);
 });
 
-test('daily meetings vary reproducibly, wait for all seven upstairs seats, and provide 30–60 actual discussion minutes', () => {
+test('daily meetings vary reproducibly, wait for the six employees and leave the Founder chair available, and provide 30–60 actual discussion minutes', () => {
   const starts = new Set<number>(), durations = new Set<number>();
   for (let day = 1; day <= 14; day++) {
     const first = createSimulation(day), second = createSimulation(day);
@@ -90,7 +90,7 @@ test('daily meetings vary reproducibly, wait for all seven upstairs seats, and p
     if (sim.meeting.phase === 'gathering') assert.equal(sim.meeting.elapsed, 0);
     if (sim.meeting.phase === 'discussing') {
       if (started < 0) started = absoluteMinute(sim);
-      for (const index of STAFF_WORKERS) {
+      for (const index of MEETING_PARTICIPANTS) {
         assert.deepEqual(sim.npcs[index].position, meetingSeat(meetingSlot(index)).position);
         assert.ok(seatedAt(sim, index));
       }
@@ -170,7 +170,7 @@ test('day two staggers leisure timers and overdue breaks wait after work starts 
     let sim = calmOffice(boundary - .5, 2);
     for (const index of STAFF_WORKERS) {
       sim.npcs[index].nextLeisureAt = absoluteMinute(sim) - 1;
-      if (boundary === 780) sim.npcs[index].position = lunchSeat(meetingSlot(index)).position;
+      if (boundary === 780) sim.npcs[index].position = lunchSeat(lunchSlot(index)).position;
     }
     sim = stepSimulation(sim, .5, 1);
     for (let tick = 0; tick < 3; tick++) {
@@ -191,7 +191,7 @@ test('day two staggers leisure timers and overdue breaks wait after work starts 
   }
 });
 
-test('version 5 migrates old seven-person saves, preserves progress, and places the founder and manager on their new floor', () => {
+test('version 5 migrates old seven-person saves, preserves progress, and places Felin and the manager upstairs', () => {
   const save = defaultSave(); save.simulation = calmOffice(600, 4);
   save.simulation.credits = 2600; save.simulation.npcs[2].energy = 47; save.simulation.npcs[2].workMinutes = 23;
   const raw = JSON.parse(JSON.stringify(save)); raw.version = 4; raw.simulation.npcs = raw.simulation.npcs.slice(0, 7);
@@ -201,7 +201,7 @@ test('version 5 migrates old seven-person saves, preserves progress, and places 
   assert.equal(restored.version, 5); assert.equal(restored.simulation.gameDay, 4);
   assert.equal(restored.simulation.gameMinute, 600); assert.equal(restored.simulation.credits, 2600);
   assert.equal(restored.simulation.npcs.length, 8); assert.equal(restored.simulation.npcs[2].energy, 47);
-  assert.equal(restored.simulation.npcs[2].workMinutes, 23); assert.equal(restored.simulation.npcs[7].name, 'Akbar');
+  assert.equal(restored.simulation.npcs[2].workMinutes, 23); assert.equal(restored.simulation.npcs[7].name, 'Felin');
   assert.equal(floorOf(restored.simulation.npcs[0].position), 1); assert.equal(floorOf(restored.simulation.npcs[7].position), 1);
   for (let index = 0; index < restored.simulation.npcs.length; index++) {
     assert.ok(isWalkable(restored.simulation.npcs[index].position)); assert.ok(isWalkable(activityGoal(restored.simulation, index)));

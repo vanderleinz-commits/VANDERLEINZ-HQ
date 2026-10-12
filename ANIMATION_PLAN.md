@@ -55,4 +55,8 @@ Percakapan dan rapat memakai giliran bicara. Amanda melayani dari belakang meja.
 
 Hasil perlu dilihat kembali di kantor karena kamera, cahaya, dan furnitur memengaruhi keterbacaan. Checklist ada di [QA.md](QA.md).
 
-Fondasi dapat diganti dengan mesh berbobot/skeletal clips dengan mempertahankan kontrak proporsi, profil, arah hadap, pose, serta titik kursi. Pengembangan IK, penghindaran kerumunan, dan interaksi furnitur Avatar berada di luar Phase 01.
+Furnitur, staf, client, dan avatar memakai elevasi permukaan lantai yang sama. Tamu memperbarui posisi vertikal serta pose tangga saat berpindah lantai. Founder dan ATLAS memakai dua titik sofa berbeda; tamu, ATLAS, dan Founder memakai kursi berbeda pada ruang client. Pantry memisahkan tujuh kursi staf dan satu kursi pemilik. Felin tetap di kursi lawan bicara selama konsultasi avatar berlangsung.
+
+Kamera avatar mempertahankan satu arah pandang dan meredam target, tinggi, serta jarak secara terpisah. Benturan kamera hanya membaca arsitektur, sehingga monitor dan furnitur kecil tidak menyebabkan perubahan sudut berulang. Kontrol jalan mempertahankan arah walaupun jarak kamera berubah.
+
+Fondasi dapat diganti dengan mesh berbobot/skeletal clips dengan mempertahankan kontrak proporsi, profil, arah hadap, pose, serta titik kursi. Pengembangan IK dan penghindaran kerumunan masih belum tersedia.

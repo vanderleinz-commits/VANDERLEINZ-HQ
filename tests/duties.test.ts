@@ -1,34 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { absoluteMinute, stepSimulation, seatedAt, defaultSave, parseSave } from '../src/simulation.ts';
-import { founderMeetingSeat, inspectionPoint, librarySeat, ATTENDANCE_POINT } from '../src/officeLayout.ts';
+import { absoluteMinute, stepSimulation, seatedAt, defaultSave, parseSave, setOwnerEngagement, setOwnerRoom, joinClientMeeting } from '../src/simulation.ts';
+import { founderMeetingSeat, inspectionPoint, librarySeat, ATTENDANCE_POINT, clientMeetingSeat } from '../src/officeLayout.ts';
 import { pointDistance, isWalkable, elevation } from '../src/navigation.ts';
 import { requestInteraction } from '../src/social.ts';
 import { calmOffice, advance } from './helpers.ts';
 
-test('the founder and manager start a private discussion only after both reach their chairs', () => {
-  let sim = calmOffice();
-  const deadline = absoluteMinute(sim) + 120;
-  for (const [index, target] of [[0, 7], [7, 0]]) sim.npcs[index].duty = { kind: 'private', target, phase: 'travel', elapsed: 0, duration: 8, deadline };
-  assert.equal(requestInteraction(sim, 0, 1, 'chat'), sim, 'Management tasks take priority over manual social commands');
-  let bothSeatedAt = -1, completedAt = -1;
-  for (let tick = 0; tick < 120; tick++) {
-    sim = stepSimulation(sim, .5, 1);
-    const bothAtChairs = [0, 7].every((index) => !sim.npcs[index].path.length && pointDistance(sim.npcs[index].position, founderMeetingSeat(index).position) < .1);
-    if (!bothAtChairs && bothSeatedAt < 0) for (const index of [0, 7]) assert.equal(sim.npcs[index].duty?.elapsed, 0);
-    if (bothAtChairs && bothSeatedAt < 0) {
-      bothSeatedAt = absoluteMinute(sim);
-      assert.ok(seatedAt(sim, 0)); assert.ok(seatedAt(sim, 7));
-    }
-    if (sim.completedDuties.private > 0) { completedAt = absoluteMinute(sim); break; }
-  }
-  assert.ok(bothSeatedAt > 600, 'The manager first walks from his office');
-  assert.ok(completedAt >= bothSeatedAt + 7.5);
-  assert.equal(sim.completedDuties.private, 2, 'Both participants finish the shared discussion');
-  assert.equal(sim.npcs[0].duty, null); assert.equal(sim.npcs[7].duty, null);
+test('ATLAS reaches a distinct sofa seat and waits until the owner avatar joins the private discussion', () => {
+  let sim = setOwnerRoom(setOwnerEngagement(calmOffice(),true,null),3);
+  sim.npcs[0].duty={kind:'private',target:1,phase:'travel',elapsed:0,duration:8,deadline:absoluteMinute(sim)+120};
+  assert.equal(requestInteraction(sim,0,1,'chat'),sim);
+  for(let tick=0;tick<120&&sim.npcs[0].duty?.phase!=='active';tick++)sim=stepSimulation(sim,.5,1);
+  assert.deepEqual(sim.npcs[0].position,founderMeetingSeat(1).position);
+  assert.ok(seatedAt(sim,0));assert.ok(pointDistance(founderMeetingSeat(0).position,sim.npcs[0].position)>.8);
+  sim=advance(sim,4);assert.equal(sim.npcs[0].duty?.elapsed,0);
+  sim=setOwnerEngagement(sim,true,'atlas');sim=advance(sim,8);
+  assert.equal(sim.completedDuties.private,1);assert.equal(sim.npcs[0].duty,null);
+  assert.equal(sim.npcs[7].name,'Felin');assert.equal(sim.npcs[7].duty,null);
 });
 
-test('a broken founder computer pauses work until NEXUS physically arrives upstairs and finishes the repair', () => {
+test('a broken HRD computer pauses work until NEXUS physically arrives upstairs and finishes the repair', () => {
   let sim = calmOffice();
   sim.computerIssues.push({ owner: 7, reportedAt: absoluteMinute(sim), resolvedAt: null });
   let arrivedAt = -1, repairedAt = -1, duration = -1;
@@ -54,7 +45,7 @@ test('a broken founder computer pauses work until NEXUS physically arrives upsta
   assert.equal(sim.completedDuties.repair, 1);
   assert.equal(sim.npcs[5].duty, null);
   sim = advance(sim, 2);
-  assert.ok(sim.npcs[7].workMinutes > 0, 'The founder resumes work once his computer is repaired');
+  assert.ok(sim.npcs[7].workMinutes > 0, 'Felin resumes work once his computer is repaired');
 });
 
 test('an employee due for a random break stays at his computer until the manager finishes inspecting his work', () => {
@@ -100,24 +91,24 @@ test('reading waits for a real library seat, completes after its seated duration
   assert.equal(sim.completedDuties.read, 0);
 });
 
-test('visitor reception records a client only after an actual desk service and the visitor eventually leaves', () => {
-  let sim = calmOffice(); sim.nextClientAt = absoluteMinute(sim) + .5;
-  let clientName = '', sawService = false, sawServed = false, sawLeaving = false;
-  for (let tick = 0; tick < 240; tick++) {
-    sim = stepSimulation(sim, .5, 1);
-    if (sim.clients[0] && !clientName) { clientName = sim.clients[0].name; sim.nextClientAt = 1e8; }
-    for (const client of sim.clients) {
-      assert.ok(isWalkable(client.position));
-      if (sim.reception.client && sim.reception.phase === 'service') {
-        sawService = true; assert.ok(pointDistance(client.position, ATTENDANCE_POINT) < .2);
-      }
-      if (client.phase === 'served') sawServed = true;
-      if (client.phase === 'leaving') sawLeaving = true;
-    }
+test('a client is served at the desk, climbs upstairs and waits until the owner avatar joins', () => {
+  let sim=calmOffice();sim.nextClientAt=600.5;
+  let name='',sawService=false,sawStairs=false;
+  for(let tick=0;tick<160;tick++){
+    sim=stepSimulation(sim,.5,1);
+    if(sim.clients[0]&&!name){name=sim.clients[0].name;sim.clients[0].target='owner';sim.nextClientAt=1e8;}
+    const client=sim.clients[0];if(!client)continue;
+    assert.ok(isWalkable(client.position));
+    if(elevation(client.position)>.1&&elevation(client.position)<3.7)sawStairs=true;
+    if(sim.reception.client&&sim.reception.phase==='service'){sawService=true;assert.ok(pointDistance(client.position,ATTENDANCE_POINT)<.2);}
   }
-  assert.ok(clientName); assert.ok(sawService); assert.ok(sawServed); assert.ok(sawLeaving);
-  assert.equal(sim.reception.log.filter((entry) => entry.kind === 'client' && entry.name === clientName).length, 1);
-  assert.ok(sim.clients.every((client) => client.phase === 'offsite'));
+  const client=sim.clients[0];assert.ok(sawService);assert.ok(sawStairs);
+  assert.equal(client.phase,'meeting');assert.deepEqual(client.position,clientMeetingSeat(client.seatSlot).position);
+  assert.equal(sim.reception.log.filter(entry=>entry.kind==='client'&&entry.name===name).length,1);
+  assert.equal(joinClientMeeting(sim,client.id),sim,'Director mode cannot service the owner client');
+  sim.hqPoints=70;sim=setOwnerRoom(setOwnerEngagement(sim,true,'client'),11);
+  sim=joinClientMeeting(sim,client.id);sim=advance(sim,70);
+  assert.equal(sim.clients[0].phase,'offsite');assert.equal(sim.hqPoints,78);
 });
 
 test('version 5 saves resume an upstairs repair from mid-stair elevation with the broken computer and duty intact', () => {

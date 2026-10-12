@@ -7,7 +7,8 @@ import { officeOpen, officePower, computerBroken } from './simulation';
 import type { Simulation } from './simulation';
 import { roomAt } from './navigation';
 import type { Point } from './navigation';
-import { desks, roomLocal, roomRotation, FLOOR_HEIGHT } from './officeLayout';
+import { desks, roomRotation, ownerDeskPoint, FLOOR_HEIGHT, FLOOR_SURFACE_HEIGHT } from './officeLayout';
+import { willUseDoor } from './doors';
 import { GRAPHICS, PALETTE } from './artDirection';
 import type { GraphicsQuality } from './artDirection';
 import { FourPointStar } from './VisualPrimitives';
@@ -34,17 +35,19 @@ export function RoomLife({ room, simulation, speed, reducedMotion, avatar, avata
   const screens = useRef<(THREE.MeshStandardMaterial | null)[]>([]), lamp = useRef<THREE.MeshStandardMaterial>(null);
   const ceiling = useRef<THREE.MeshStandardMaterial>(null), phase = useRef(room.id * 0.4);
   const roomDesks = desks.filter((d) => d.roomId === room.id);
+  if (room.id === 3) roomDesks.push({roomId:3,x:ownerDeskPoint[0],z:ownerDeskPoint[1],y:FLOOR_HEIGHT,floor:1,rotation:roomRotation(3),staffIndex:-1});
   const power = officePower(simulation);
-  const floorHeight = room.floor * FLOOR_HEIGHT;
+  const floorHeight = room.floor * FLOOR_HEIGHT + FLOOR_SURFACE_HEIGHT;
+  const previousAvatar = useRef<Point>([...avatar.current]);
   const occupied = simulation.npcs.some((n) => roomAt(n.position) === room.id);
   useFrame((_, delta) => {
     const t = phase.current;
     if (speed > 0 && !reducedMotion) phase.current += Math.min(delta, 0.1) * Math.min(speed, 2);
-    const threshold = roomLocal(room.id, 0, room.depth / 2);
-    const entering = (point: Point) => Math.abs((point[2] ?? 0) - floorHeight) < .55 && roomAt(point) === room.id && Math.hypot(point[0] - threshold[0], point[1] - threshold[1]) < 1.35;
-    const shouldOpen = simulation.npcs.some((n, i) => i !== 6 && n.presence !== 'offsite' && entering(n.position))
-      || simulation.clients.some((client) => client.phase !== 'offsite' && entering(client.position))
-      || avatarActive && entering(avatar.current);
+    const avatarMotion: [number,number] = [avatar.current[0]-previousAvatar.current[0],avatar.current[1]-previousAvatar.current[1]];
+    const shouldOpen = simulation.npcs.some((n) => n.presence !== 'offsite' && willUseDoor(room.id,n.position,n.path.at(-1)))
+      || simulation.clients.some((client) => client.phase !== 'offsite' && willUseDoor(room.id,client.position,client.path.at(-1)))
+      || avatarActive && willUseDoor(room.id,avatar.current,undefined,avatarMotion);
+    previousAvatar.current=[...avatar.current];
     if (leftDoor.current && rightDoor.current && (speed > 0 || avatarActive)) {
       const distance = shouldOpen ? .76 : 0;
       leftDoor.current.position.x = reducedMotion ? -distance : THREE.MathUtils.damp(leftDoor.current.position.x, -distance, 12, delta);
@@ -56,7 +59,7 @@ export function RoomLife({ room, simulation, speed, reducedMotion, avatar, avata
       if (!material) return;
       const d = roomDesks[index], employee = simulation.npcs[d.staffIndex];
       const broken = computerBroken(simulation, d.staffIndex);
-      const active = employee?.activity === 'work' && employee.path.length === 0 && roomAt(employee.position) === room.id;
+      const active = d.staffIndex===-1 ? simulation.ownerActive&&simulation.ownerRoom===3&&simulation.ownerActivity==='work' : employee?.activity === 'work' && employee.path.length === 0 && roomAt(employee.position) === room.id;
       material.color.set(power ? broken ? '#9C6E87' : active ? '#8CBACB' : '#45636F' : '#263C48');
       material.emissive.set(broken ? '#B8869F' : PALETTE.sky);
       material.emissiveIntensity = power * (broken ? .17 : active ? 0.18 + (!reducedMotion && speed > 0 ? Math.sin(t * 1.5) * 0.018 : 0) : 0.035);
@@ -69,12 +72,13 @@ export function RoomLife({ room, simulation, speed, reducedMotion, avatar, avata
     if (steam.current) { steam.current.visible = power > 0 && occupied; steam.current.children.forEach((particle, i) => { const p = (t * 0.28 + i / 3) % 1; particle.position.y = p * 0.36; particle.position.x = Math.sin(t * 1.6 + i) * 0.035 * motion; particle.scale.setScalar(reducedMotion ? 0.65 : 0.35 + p * 0.6); }); }
   });
   return <>
-    {roomDesks.map((d, index) => <group key={d.staffIndex} position={[d.x, d.y, d.z]} rotation={[0, d.rotation, 0]}>
+    {roomDesks.map((d, index) => <group key={d.staffIndex} position={[d.x, d.y + FLOOR_SURFACE_HEIGHT, d.z]} rotation={[0, d.rotation, 0]}>
       <mesh position={[0, 1.13, -0.145]}><boxGeometry args={[0.517, 0.287, 0.005]} /><meshStandardMaterial ref={(material) => { screens.current[index] = material; }} color={power ? '#91bac2' : '#263c48'} emissive="#7cb3c4" emissiveIntensity={power * 0.24} roughness={0.5} /></mesh>
       {power > 0 && (computerBroken(simulation, d.staffIndex) ? <>{[-1, 1].map((side) => <mesh key={side} position={[0, 1.13, -.137]} rotation={[0, 0, side * Math.PI / 4]}><boxGeometry args={[.135, .022, .003]} /><meshBasicMaterial color="#f5dbe2" /></mesh>)}</> : <>{[0, 1, 2].map((i) => <mesh key={i} position={[-0.13 + i * 0.05, 1.19 - i * 0.06, -0.139]}><boxGeometry args={[0.18 + i * 0.06, 0.012, 0.003]} /><meshBasicMaterial color={i === 0 ? '#e4eee9' : '#c2dbe0'} /></mesh>)}<mesh position={[0.15, 1.11, -0.138]}><boxGeometry args={[0.075, 0.125, 0.003]} /><meshBasicMaterial color="#6e9ba6" /></mesh></>)}
     </group>)}
     <group position={[room.center[0], floorHeight, room.center[1]]} rotation={[0, roomRotation(room.id), 0]}>
-      <group position={[-0.75, 0, room.depth / 2]} userData={{ cameraObstacle: true }}>
+      <group position={[-0.75, 0, room.depth / 2 + .09]} userData={{ cameraObstacle: true }}>
+        <mesh position={[.75,2.1,0]}><boxGeometry args={[3,.08,.14]} /><meshStandardMaterial color={PALETTE.corporate} roughness={.7} /></mesh>
         <group>
           <group ref={leftDoor}>
           <mesh position={[0.375, 1.04, 0]}><boxGeometry args={[0.72, 1.94, 0.045]} /><meshStandardMaterial color={[9, 10].includes(room.id) ? PALETTE.corporate : PALETTE.sky} transparent={![9, 10].includes(room.id)} opacity={[9, 10].includes(room.id) ? 1 : .24} roughness={[9, 10].includes(room.id) ? .9 : .48} depthWrite={[9, 10].includes(room.id)} /></mesh>

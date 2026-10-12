@@ -1,24 +1,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rooms, staff, STAFF_WORKERS, FLOOR_HEIGHT } from '../src/worldData.ts';
-import { ENTRY_POINT, STAIR_BOTTOM, STAIR_TOP, workSeat, meetingSeat, lunchSeat, librarySeat, interviewSeat, founderMeetingSeat, toiletPoint, attendancePoint, pantryCookPoint, pantryDrinkPoint, inspectionPoint, meetingSlot } from '../src/officeLayout.ts';
+import { rooms, staff, STAFF_WORKERS, MEETING_PARTICIPANTS, FLOOR_HEIGHT } from '../src/worldData.ts';
+import { ENTRY_POINT, STAIR_BOTTOM, STAIR_TOP, workSeat, meetingSeat, lunchSeat, librarySeat, interviewSeat, founderMeetingSeat, toiletPoint, attendancePoint, pantryCookPoint, pantryDrinkPoint, inspectionPoint, meetingSlot, lunchSlot, ownerDeskSeat, clientMeetingSeat, RECEPTION_POST, ATTENDANCE_POINT } from '../src/officeLayout.ts';
 import { findPath, moveAlong, moveAvatar, isWalkable, elevation, onStairs, floorOf, roomAt, pointDistance } from '../src/navigation.ts';
 
 const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < .00001, `${a} should equal ${b}`);
-const allAnchors = () => [
+const allAnchors = () => [RECEPTION_POST, ATTENDANCE_POINT, ownerDeskSeat.position, ...Array.from({length:4},(_,i)=>clientMeetingSeat(i).position), lunchSeat(7).position,
   ...STAFF_WORKERS.flatMap((index) => [workSeat(index).position, inspectionPoint(index), attendancePoint(index)]),
   ...Array.from({ length: 7 }, (_, slot) => [meetingSeat(slot).position, lunchSeat(slot).position]).flat(),
   librarySeat(0).position, librarySeat(1).position, interviewSeat(0).position, interviewSeat(1).position,
-  founderMeetingSeat(0).position, founderMeetingSeat(7).position, toiletPoint(9), toiletPoint(10), pantryCookPoint, pantryDrinkPoint,
+  founderMeetingSeat(0).position, founderMeetingSeat(1).position, toiletPoint(9), toiletPoint(10), pantryCookPoint, pantryDrinkPoint,
 ];
 
-test('the 11-room office uses distinct floors and a workspace exactly twice the standard room area', () => {
-  assert.equal(rooms.length, 11);
+test('the 12-room office has a double reception and workspace plus five upstairs rooms', () => {
+  assert.equal(rooms.length, 12);
   assert.equal(staff.length, 8);
-  assert.equal(rooms[1].width * rooms[1].depth, 2 * rooms[0].width * rooms[0].depth);
-  assert.deepEqual(rooms.filter((room) => room.floor === 1).map((room) => room.id), [2, 3, 7]);
+  assert.equal(rooms[1].width * rooms[1].depth, 2 * rooms[2].width * rooms[2].depth);
+  assert.equal(rooms[0].width * rooms[0].depth, 2 * rooms[2].width * rooms[2].depth);
+  assert.ok(isWalkable(ENTRY_POINT));
+  assert.deepEqual(rooms.filter((room) => room.floor === 1).map((room) => room.id), [2, 3, 4, 7, 11]);
   assert.equal(roomAt([-9.8, -3.3, 0]), 8);
-  assert.equal(roomAt([5.2, -3.3, FLOOR_HEIGHT]), 7);
+  assert.equal(roomAt([0, -3.3, FLOOR_HEIGHT]), 7);
   assert.equal(roomAt([-9.8, -3.3]), 8, 'Legacy 2D points remain on the ground floor');
   assert.equal(roomAt([10.5, 2.9, FLOOR_HEIGHT / 2]), null);
 });
@@ -85,7 +87,9 @@ test('avatar climbs and descends from stair landings and cannot jump onto the sl
 });
 
 test('seven workers have distinct attendance positions and seats while Amanda remains outside worker slots', () => {
-  assert.deepEqual(STAFF_WORKERS.map(meetingSlot), [0, 1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(STAFF_WORKERS.map(lunchSlot), [0, 1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(MEETING_PARTICIPANTS.map(meetingSlot),[0,1,2,3,4,5]);
+  assert.equal(meetingSlot(7),-1);
   assert.equal(meetingSlot(6), -1);
   assert.equal(new Set(STAFF_WORKERS.map((index) => JSON.stringify(attendancePoint(index)))).size, 7);
   for (const first of STAFF_WORKERS) for (const second of STAFF_WORKERS) if (first < second) assert.ok(pointDistance(attendancePoint(first), attendancePoint(second)) >= .69, 'Waiting workers need space for their bodies');

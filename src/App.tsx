@@ -4,11 +4,11 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
-import { rooms, staff, taskLabels, STAFF_WORKERS, FLOOR_HEIGHT } from './worldData';
+import { rooms, staff, taskLabels, STAFF_WORKERS, FLOOR_HEIGHT, FLOOR_SURFACE_HEIGHT } from './worldData';
 import type { Room, Staff } from './worldData';
-import { moveAvatar, findPath, moveAlong, nearestWalkable, roomAt, elevation, floorOf, onStairs, pointDistance } from './navigation';
+import { moveAvatar, isWalkable, findPath, moveAlong, roomAt, elevation, floorOf, onStairs, pointDistance } from './navigation';
 import type { Point } from './navigation';
-import { loadGame, stepSimulation, assignActivity, greet, joinClientMeeting, recordOwnerAttendance, setOwnerRoom, absoluteMinute, activityLabels, SAVE_KEY, weekdayName, officeOpen, seatedAt, meetingDialogue, schedule, npcPose, routineDialogue, computerBroken } from './simulation';
+import { loadGame, stepSimulation, assignActivity, greet, joinClientMeeting, recordOwnerAttendance, setOwnerRoom, setOwnerEngagement, absoluteMinute, activityLabels, SAVE_KEY, weekdayName, officeOpen, seatedAt, meetingDialogue, schedule, npcPose, routineDialogue, computerBroken } from './simulation';
 import type { SaveData, Simulation, NpcState } from './simulation';
 import { requestInteraction, cancelInteraction, encounterFor, interactionLabels, interactionDuration, dialogueFor, bondKey, bondLabel } from './social';
 import type { InteractionKind } from './social';
@@ -17,12 +17,13 @@ import type { Pose } from './CharacterRig';
 import { RoomLife, OfficeLighting, daylight } from './RoomLife';
 import { SpeechBubble } from './SpeechBubble';
 import { OfficeFurnishings, OfficeEntrance, OfficeLandscape } from './OfficeArchitecture';
-import { arrivalMinute, workSeat, desks, RECEPTION_POST, ATTENDANCE_POINT, ownerDeskSeat, founderMeetingSeat, clientMeetingSeat, meetingSeat, lunchSeat, pantryDrinkPoint, toiletPoint, roomLocal } from './officeLayout';
+import { arrivalMinute, workSeat, desks, RECEPTION_POST, ATTENDANCE_POINT, ownerDeskSeat, founderMeetingSeat, clientMeetingSeat, meetingSeat, lunchSeat, pantryDrinkPoint, toiletPoint, roomLocal, hrdSeat, OWNER_LUNCH_SLOT } from './officeLayout';
 import { BuildingShell } from './BuildingShell';
 import type { FloorView } from './BuildingShell';
 import { BRAND, GRAPHICS, PALETTE } from './artDirection';
 import type { GraphicsQuality } from './artDirection';
 import { characterProfile } from './characterProfiles';
+import { FOLLOW_OFFSET, avatarDirection, followWeight } from './avatarCamera';
 
 const VisualStudio = lazy(() => import('./VisualStudio'));
 
@@ -93,6 +94,8 @@ function App() {
   const nearby = npcs.findIndex((npc) => npc.presence === 'inside' && npc.duty?.kind !== 'toilet' && pointDistance(npc.position, avatarPosition.current) < 1.8);
   const clientNearby = simulation.clients.find((client) => client.phase === 'meeting' && client.target !== 'atlas' && !client.ownerJoined && pointDistance(client.position, avatarPosition.current) < 2.7);
   const atlasWaiting = npcs[0]?.duty?.kind === 'private' && avatarRoom === 3;
+  const hrAvailable = npcs[7]?.presence==='inside'&&!npcs[7].duty&&!npcs.some((npc,index)=>index!==7&&npc.duty?.kind==='hr');
+  const receptionAvailable = !npcs[6].duty&&simulation.reception.person===null;
   const peopleInside = npcs.filter(n => n.presence !== 'offsite' && n.presence !== 'leaving').length;
   const completedRoutines = Object.values(simulation.completedDuties).reduce((total, count) => total + count, 0);
   const meetingActive = ['gathering','discussing'].includes(simulation.meeting.phase);
@@ -141,6 +144,7 @@ function App() {
   const focusRoom = (id: number) => { setSelectedRoom(id); setFloorView(rooms[id].floor); setMobilePanel(null); setMode('director'); };
   const chooseFloor = (next: FloorView) => { setFloorView(next); setMode('director'); if (next !== 'all' && room.floor !== next) setSelectedRoom(next === 0 ? 1 : 2); };
   const changeMode = (next: 'director' | 'avatar') => {
+    setPlayerAction(null);
     setMode(next); setMobilePanel(null);
     const currentFloor = floorOf(avatarPosition.current);
     if (next === 'avatar') setFloorView(currentFloor);
@@ -149,9 +153,12 @@ function App() {
   const inspectNpc = (index: number) => { setMobilePanel(null); setShowMoments(false); setSelectedNpc(index); setPartner(STAFF_WORKERS.find((other) => other !== index) ?? 0); focusRoom(roomAt(npcs[index].position) ?? staff[index].roomId); };
   const beginPlayerAction = (kind:PlayerActionKind, goal:Point, pose:Pose, duration=0, targetId?:number, rotation=0) => {
     if(speed===0)return;
-    setPlayerAction({id:nextPlayerAction.current++,kind,goal:nearestWalkable(goal),pose,rotation,duration,phase:'travel',startedAt:0,targetId});
+    if(kind==='consult'&&!hrAvailable||kind==='attendance'&&!receptionAvailable){setToast('Sedang melayani orang lain. Tunggu sebentar, ya.');return;}
+    if(!isWalkable(goal)||!findPath(avatarPosition.current,goal).length&&pointDistance(avatarPosition.current,goal)>.08){setToast('Titik interaksi belum bisa dijangkau.');return;}
+    setPlayerAction({id:nextPlayerAction.current++,kind,goal,pose,rotation,duration,phase:'travel',startedAt:0,targetId});
     touchKeys.current.clear();
   };
+  useEffect(()=>{setSimulation(current=>setOwnerEngagement(current,mode==='avatar'&&!showStudio,playerAction?.phase==='active'?playerAction.kind:null));},[mode,showStudio,playerAction?.phase,playerAction?.kind]);
   const completePlayerArrival = (id:number) => {
     const action=playerAction;
     if(!action||action.id!==id||action.phase!=='travel')return;
@@ -184,12 +191,12 @@ function App() {
       if (event.code !== 'KeyE') return;
       event.preventDefault();
       if (playerAction) { setPlayerAction(null); return; }
-      if (nearby === 6) { beginPlayerAction('attendance', ATTENDANCE_POINT, 'sign', 2, undefined, Math.PI); return; }
+      if (nearby === 6 && receptionAvailable) { beginPlayerAction('attendance', ATTENDANCE_POINT, 'sign', 2, undefined, Math.PI); return; }
       if (clientNearby) { beginPlayerAction('client', clientMeetingSeat(0).position, 'talk', 8, clientNearby.id, clientMeetingSeat(0).rotation); return; }
-      if (avatarRoom === 2 && meetingActive) { beginPlayerAction('meeting', meetingSeat(6).position, 'talk', Math.max(1, simulation.meeting.duration - simulation.meeting.elapsed), undefined, meetingSeat(6).rotation); return; }
+      if (avatarRoom === 2 && meetingActive) { beginPlayerAction('meeting', meetingSeat(6).position, 'talk', 0, undefined, meetingSeat(6).rotation); return; }
       if (atlasWaiting) { beginPlayerAction('atlas', founderMeetingSeat(0).position, 'talk', 12, undefined, founderMeetingSeat(0).rotation); return; }
-      if (nearby === 7) { beginPlayerAction('consult', avatarPosition.current, 'talk', 6); return; }
-      if (avatarRoom === 5) { beginPlayerAction('meal', lunchSeat(6).position, 'eat', 18, undefined, lunchSeat(6).rotation); return; }
+      if (nearby === 7 && hrAvailable) { beginPlayerAction('consult', hrdSeat(0).position, 'talk', 10, undefined, hrdSeat(0).rotation); return; }
+      if (avatarRoom === 5) { beginPlayerAction('meal', lunchSeat(OWNER_LUNCH_SLOT).position, 'eat', 18, undefined, lunchSeat(OWNER_LUNCH_SLOT).rotation); return; }
       if (avatarRoom === 9 || avatarRoom === 10) { beginPlayerAction('toilet', toiletPoint(avatarRoom), 'toilet', 5); return; }
       greetNearby();
     };
@@ -302,17 +309,17 @@ function App() {
         {mode === 'avatar' && <div className="avatar-actions">
           {playerAction ? <button onClick={() => setPlayerAction(null)}>{playerAction.phase==='travel'?'Berjalan · batal':'X · Selesai: '+PLAYER_ACTION_LABELS[playerAction.kind]}</button> : <>
             {nearby >= 0 && <button disabled={speed===0||Date.now()<greetReadyAt} onClick={greetNearby}>{Date.now()<greetReadyAt?'Sudah menyapa · tunggu':'E · Sapa '+npcs[nearby].name}</button>}
-            {nearby===6 && <button disabled={speed===0} onClick={()=>beginPlayerAction('attendance',ATTENDANCE_POINT,'sign',2,undefined,Math.PI)}>E · Absen {simulation.ownerCheckedIn?'pulang':'masuk'} dengan Amanda</button>}
-            {avatarRoom===2 && meetingActive && <button disabled={speed===0} onClick={()=>beginPlayerAction('meeting',meetingSeat(6).position,'talk',Math.max(1,simulation.meeting.duration-simulation.meeting.elapsed),undefined,meetingSeat(6).rotation)}>E · Ikut rapat</button>}
+            {nearby===6 && receptionAvailable && <button disabled={speed===0} onClick={()=>beginPlayerAction('attendance',ATTENDANCE_POINT,'sign',2,undefined,Math.PI)}>E · Absen {simulation.ownerCheckedIn?'pulang':'masuk'} dengan Amanda</button>}
+            {avatarRoom===2 && meetingActive && <button disabled={speed===0} onClick={()=>beginPlayerAction('meeting',meetingSeat(6).position,'talk',0,undefined,meetingSeat(6).rotation)}>E · Ikut rapat</button>}
             {avatarRoom===3 && <>
               <button disabled={speed===0} onClick={()=>beginPlayerAction('work',ownerDeskSeat.position,'work',0,undefined,ownerDeskSeat.rotation)}>F · Bekerja di meja founder</button>
               <button disabled={speed===0} onClick={()=>beginPlayerAction('sofa',founderMeetingSeat(0).position,'think',0,undefined,founderMeetingSeat(0).rotation)}>F · Duduk di sofa</button>
               {atlasWaiting && <button disabled={speed===0} onClick={()=>beginPlayerAction('atlas',founderMeetingSeat(0).position,'talk',12,undefined,founderMeetingSeat(0).rotation)}>E · Diskusi dengan ATLAS</button>}
             </>}
-            {avatarRoom===5 && <><button disabled={speed===0} onClick={()=>beginPlayerAction('meal',lunchSeat(6).position,'eat',18,undefined,lunchSeat(6).rotation)}>E · Makan di pantry</button><button disabled={speed===0} onClick={()=>beginPlayerAction('drink',pantryDrinkPoint,'coffee',4)}>E · Ambil minum</button></>}
+            {avatarRoom===5 && <><button disabled={speed===0} onClick={()=>beginPlayerAction('meal',lunchSeat(OWNER_LUNCH_SLOT).position,'eat',18,undefined,lunchSeat(OWNER_LUNCH_SLOT).rotation)}>E · Makan di pantry</button><button disabled={speed===0} onClick={()=>beginPlayerAction('drink',pantryDrinkPoint,'coffee',4)}>E · Ambil minum</button></>}
             {(avatarRoom===9||avatarRoom===10) && <button disabled={speed===0} onClick={()=>beginPlayerAction('toilet',toiletPoint(avatarRoom),'toilet',5)}>E · Gunakan WC</button>}
             {clientNearby && <button disabled={speed===0} onClick={()=>beginPlayerAction('client',clientMeetingSeat(0).position,'talk',8,clientNearby.id,clientMeetingSeat(0).rotation)}>E · Bertemu {clientNearby.name}</button>}
-            {nearby===7 && <button disabled={speed===0} onClick={()=>beginPlayerAction('consult',avatarPosition.current,'talk',6)}>E · Konsultasi dengan Felin</button>}
+            {nearby===7 && hrAvailable && <button disabled={speed===0} onClick={()=>beginPlayerAction('consult',hrdSeat(0).position,'talk',10,undefined,hrdSeat(0).rotation)}>E · Konsultasi dengan Felin</button>}
           </>}
           <div className="walk-pad" aria-label="Avatar movement">{[['w','↑'],['a','←'],['s','↓'],['d','→']].map(([key,label]) => <button key={key} aria-label={'Walk ' + key.toUpperCase()} onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); touchKeys.current.add(key); }} onPointerUp={() => touchKeys.current.delete(key)} onPointerCancel={() => touchKeys.current.delete(key)} onLostPointerCapture={() => touchKeys.current.delete(key)}>{label}</button>)}</div>
         </div>}
@@ -367,11 +374,11 @@ type WorldProps = { selectedRoom: number; floorView: FloorView; mode: 'director'
 function OfficeWorld({ selectedRoom, floorView, mode, simulation, speed, reducedMotion, avatarGesture, avatarPosition, touchKeys, playerAction, onPlayerArrival, onPlayerCancel, onAvatarRoomChange, onAvatarFloorChange, onSelectRoom, onSelectNpc }: WorldProps) {
   const visibleRooms = rooms.filter((room) => floorView === 'all' || room.floor === floorView);
   return <group>
-    <BuildingShell floorView={floorView} selectedRoom={selectedRoom} onSelectRoom={onSelectRoom} />
+    <BuildingShell floorView={floorView} selectedRoom={selectedRoom} onSelectRoom={onSelectRoom} showLabels={mode==='director'} />
     {visibleRooms.map((room) => <OfficeFurnishings key={`f-${room.id}`} room={room} />)}
     {visibleRooms.map((room) => <RoomLife key={`life-${room.id}`} room={room} simulation={simulation} speed={speed} reducedMotion={reducedMotion} avatar={avatarPosition} avatarActive={mode === 'avatar'} />)}
     {staff.map((person, index) => <StaffActor key={person.name} index={index} person={person} npc={simulation.npcs[index]} visible={floorView === 'all' || floorOf(simulation.npcs[index].position) === floorView || onStairs(simulation.npcs[index].position)} simulation={simulation} speed={speed} reducedMotion={reducedMotion} avatarPosition={avatarPosition} avatarActive={mode === 'avatar'} onSelect={() => onSelectNpc(index)} />)}
-    {simulation.clients.map((client, index) => <ClientActor key={client.id} client={client} index={index} simulation={simulation} visible={floorView !== 1} speed={speed} reducedMotion={reducedMotion} />)}
+    {simulation.clients.map((client, index) => <ClientActor key={client.id} client={client} index={index} simulation={simulation} visible={floorView === 'all' || floorOf(client.position) === floorView || onStairs(client.position)} speed={speed} reducedMotion={reducedMotion} />)}
     {simulation.computerIssues.filter((issue) => issue.resolvedAt === null).map((issue) => {
       const desk = desks.find((item) => item.staffIndex === issue.owner);
       if (!desk || floorView !== 'all' && desk.floor !== floorView || !officeOpen(simulation.gameMinute)) return null;
@@ -386,7 +393,7 @@ function OfficeWorld({ selectedRoom, floorView, mode, simulation, speed, reduced
 
 function StaffActor({ person, npc, index, visible, simulation, speed, reducedMotion, avatarPosition, avatarActive, onSelect }: { person: Staff; npc: NpcState; index: number; visible: boolean; simulation: Simulation; speed: number; reducedMotion: boolean; avatarPosition: RefObject<Point>; avatarActive: boolean; onSelect: () => void }) {
   const actor = useRef<THREE.Group>(null);
-  const origin = useRef<[number, number, number]>([npc.position[0], elevation(npc.position), npc.position[1]]);
+  const origin = useRef<[number, number, number]>([npc.position[0], elevation(npc.position) + FLOOR_SURFACE_HEIGHT, npc.position[1]]);
   const encounter = encounterFor(simulation, index);
   const dialogue = encounter?.phase === 'talking' ? dialogueFor(encounter) : routineDialogue(simulation, index) ?? (index !== 6 && npc.activity === 'meeting' ? meetingDialogue(simulation) : null);
   const seat = seatedAt(simulation,index);
@@ -401,7 +408,7 @@ function StaffActor({ person, npc, index, visible, simulation, speed, reducedMot
     if (!actor.current || speed === 0) return;
     const dx = npc.position[0] - actor.current.position.x, dz = npc.position[1] - actor.current.position.z;
     actor.current.position.x = THREE.MathUtils.damp(actor.current.position.x, npc.position[0], 18, delta);
-    actor.current.position.y = THREE.MathUtils.damp(actor.current.position.y, elevation(npc.position), 18, delta);
+    actor.current.position.y = THREE.MathUtils.damp(actor.current.position.y, elevation(npc.position) + FLOOR_SURFACE_HEIGHT, 18, delta);
     actor.current.position.z = THREE.MathUtils.damp(actor.current.position.z, npc.position[1], 18, delta);
     let facing = actor.current.rotation.y;
     if (npc.path.length && Math.abs(dx) + Math.abs(dz) > 0.01) facing = Math.atan2(dx, dz);
@@ -423,14 +430,15 @@ function StaffActor({ person, npc, index, visible, simulation, speed, reducedMot
 }
 
 function ClientActor({ client, index, visible, simulation, speed, reducedMotion }: { client: Simulation['clients'][number]; index: number; visible: boolean; simulation: Simulation; speed: number; reducedMotion: boolean }) {
-  const actor = useRef<THREE.Group>(null), origin = useRef<[number, number, number]>([client.position[0], elevation(client.position), client.position[1]]);
+  const actor = useRef<THREE.Group>(null), origin = useRef<[number, number, number]>([client.position[0], elevation(client.position) + FLOOR_SURFACE_HEIGHT, client.position[1]]);
   const signing = simulation.reception.client && simulation.reception.person === index && simulation.reception.phase === 'service';
   const profile=characterProfile(client.variant),seated=client.phase==='meeting'&&!client.path.length;
-  const pose: Pose = client.path.length ? 'walk' : signing ? 'sign' : client.phase === 'served' ? 'wave' : seated?client.ownerJoined?'talk':'think':'idle';
+  const pose: Pose = client.path.length ? onStairs(client.position)?'stairs':'walk' : signing ? 'sign' : client.phase === 'served' ? 'wave' : seated?client.ownerJoined?'talk':'think':'idle';
   useFrame((_, delta) => {
     if (!actor.current || speed === 0) return;
     const dx = client.position[0] - actor.current.position.x, dz = client.position[1] - actor.current.position.z;
     actor.current.position.x = THREE.MathUtils.damp(actor.current.position.x, client.position[0], 18, delta);
+    actor.current.position.y = THREE.MathUtils.damp(actor.current.position.y, elevation(client.position) + FLOOR_SURFACE_HEIGHT, 18, delta);
     actor.current.position.z = THREE.MathUtils.damp(actor.current.position.z, client.position[1], 18, delta);
     const counterpart=client.target==='atlas'?clientMeetingSeat(2).position:clientMeetingSeat(0).position;
     const facing = client.path.length && Math.abs(dx) + Math.abs(dz) > .01 ? Math.atan2(dx, dz) : seated?Math.atan2(counterpart[0]-client.position[0],counterpart[1]-client.position[1]):Math.atan2(RECEPTION_POST[0] - client.position[0], RECEPTION_POST[1] - client.position[1]);
@@ -438,7 +446,7 @@ function ClientActor({ client, index, visible, simulation, speed, reducedMotion 
   });
   return <group ref={actor} position={origin.current} visible={visible && client.phase !== 'offsite'}>
     <CharacterRig color={profile.color} hair={profile.hair} variant={client.variant} pose={pose} seated={seated} speed={speed} reducedMotion={reducedMotion} />
-    <group position={[0, 1.84, 0]}><SceneLabel text={`${client.name} · TAMU`} kind="npc" /></group>
+    <group position={[0, seated ? 1.58 : 1.84, 0]}><SceneLabel text={`${client.name} · TAMU`} kind="npc" /></group>
     {client.phase === 'meeting' && <SpeechBubble name={client.name} text={client.ownerJoined?'Terima kasih sudah meluangkan waktu. Mari bahas kebutuhan proyeknya.':client.target==='both'?'Saya sudah menyiapkan agenda untuk Founder dan ATLAS.':client.target==='atlas'?'Saya ingin meninjau kebutuhan operasional dengan ATLAS.':'Saya menunggu Founder untuk membahas kerja sama.'} color={profile.color} compact={false} />}
   </group>;
 }
@@ -450,23 +458,23 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
   const pose = useRef<Pose>('idle');
   const actionPath = useRef<Point[]>([]), actionId = useRef(0), arrivalSent = useRef(false);
   const keys = useRef(new Set<string>());
-  const { camera, scene } = useThree();
+  const { camera, scene, gl } = useThree();
   const cameraBlockers = useRef<THREE.Object3D[]>([]);
   const cameraRay = useMemo(() => new THREE.Raycaster(), []);
   const movement = useMemo(() => new THREE.Vector3(), []);
-  const forward = useMemo(() => new THREE.Vector3(), []);
-  const right = useMemo(() => new THREE.Vector3(), []);
-  const cameraSide = useRef(1);
+  const cameraHeight = useRef<number>(FOLLOW_OFFSET[1]), cameraReach = useRef(1);
+  const targetReady = useRef(false);
   const cameraTarget = useMemo(() => new THREE.Vector3(), []);
   const cameraGoal = useMemo(() => new THREE.Vector3(), []);
   const boom = useMemo(() => new THREE.Vector3(), []);
+  const desiredTarget = useMemo(() => new THREE.Vector3(), []), rayDirection = useMemo(() => new THREE.Vector3(), []);
   useEffect(()=>{
     if(!playerAction){actionId.current=0;actionPath.current=[];arrivalSent.current=false;return;}
     if(actionId.current===playerAction.id)return;
     actionId.current=playerAction.id;arrivalSent.current=false;
-    const goal=nearestWalkable(playerAction.goal);
+    const goal=playerAction.goal;
     actionPath.current=findPath(position.current,goal);
-    if(!actionPath.current.length&&pointDistance(position.current,goal)>.18)actionPath.current=findPath(position.current,nearestWalkable(goal));
+    if(!actionPath.current.length&&pointDistance(position.current,goal)>.18)onCancelAction();
   },[playerAction?.id,active]);
   useEffect(() => {
     const blockers: THREE.Object3D[] = [];
@@ -476,7 +484,7 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
       if (materials.some((material) => material.transparent || !material.depthWrite)) return;
       let ancestor: THREE.Object3D | null = object;
       let marked = false, visible = true;
-      while (ancestor) { marked ||= ancestor.userData.cameraObstacle === true; visible &&= ancestor.visible; ancestor = ancestor.parent; }
+      while (ancestor) { marked ||= ancestor.userData.cameraStructure === true; visible &&= ancestor.visible; ancestor = ancestor.parent; }
       if (marked && visible) blockers.push(object);
     });
     cameraBlockers.current = blockers;
@@ -501,20 +509,18 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
     if (!avatar.current || !active) return;
     const has = (key: string) => keys.current.has(key) || touchKeys.current.has(key);
     const horizontal = Number(has('d')) - Number(has('a')), vertical = Number(has('s')) - Number(has('w'));
-    // Movement follows the camera even when an obstacle changes its shoulder view.
-    camera.getWorldDirection(forward); forward.y = 0; forward.normalize();
-    right.set(-forward.z, 0, forward.x);
-    movement.copy(right).multiplyScalar(horizontal).addScaledVector(forward, -vertical);
+    const [inputX,inputZ]=avatarDirection(horizontal,vertical);
+    movement.set(inputX,0,inputZ);
     let walking = false, targetAngle:number|null=null;
-    if(playerAction?.phase==='travel'){
+    const manual=movement.lengthSq()>0;
+    if(playerAction&&manual)onCancelAction();
+    if(playerAction?.phase==='travel'&&!manual){
       const previous=position.current,moved=moveAlong(previous,actionPath.current,Math.min(delta,.05)*1.22);
       position.current=moved.position;actionPath.current=moved.path;walking=pointDistance(previous,position.current)>.0001;
       if(walking){const next=actionPath.current[0]??playerAction.goal;targetAngle=Math.atan2(next[0]-position.current[0],next[1]-position.current[1]);}
       if(!actionPath.current.length&&pointDistance(position.current,playerAction.goal)<.2&&!arrivalSent.current){position.current=[...playerAction.goal];arrivalSent.current=true;onArrival(playerAction.id);}
-    } else if(playerAction?.phase==='active'&&movement.lengthSq()){
-      onCancelAction();
     }
-    if(!playerAction||playerAction.phase==='active'&&movement.lengthSq()){
+    if(!playerAction||manual){
       if(movement.lengthSq()){
         movement.normalize().multiplyScalar(Math.min(delta,.05)*1.45);const previous=position.current;position.current=moveAvatar(previous,movement.x,movement.z);walking=pointDistance(previous,position.current)>.0001;
         if(walking)targetAngle=Math.atan2(movement.x,movement.z);
@@ -522,43 +528,38 @@ function PlayerAvatar({ active, floorView, position, touchKeys, onRoomChange, on
     }
     if(targetAngle!==null){const angle=targetAngle-avatar.current.rotation.y;avatar.current.rotation.y+=Math.atan2(Math.sin(angle),Math.cos(angle))*(1-Math.exp(-11*delta));}
     gesture.current = Math.max(0, gesture.current - delta);
-    pose.current = playerAction?.phase==='active'?playerAction.pose:walking ? onStairs(position.current) ? 'stairs' : 'walk' : gesture.current > 0 ? 'wave' : 'idle';
-    if(playerAction?.phase==='active'){const angle=playerAction.rotation-avatar.current.rotation.y;avatar.current.rotation.y+=Math.atan2(Math.sin(angle),Math.cos(angle))*(1-Math.exp(-8*delta));}
-    const y = elevation(position.current);
+    pose.current = playerAction?.phase==='active'&&!manual?playerAction.pose:walking ? onStairs(position.current) ? 'stairs' : 'walk' : gesture.current > 0 ? 'wave' : 'idle';
+    if(playerAction?.phase==='active'&&!manual){const angle=playerAction.rotation-avatar.current.rotation.y;avatar.current.rotation.y+=Math.atan2(Math.sin(angle),Math.cos(angle))*(1-Math.exp(-8*delta));}
+    const y = elevation(position.current) + FLOOR_SURFACE_HEIGHT;
     avatar.current.position.set(position.current[0], y, position.current[1]);
     avatar.current.visible = active && (floorView === 'all' || floorOf(position.current) === floorView || onStairs(position.current)) && !(playerAction?.phase==='active'&&playerAction.kind==='toilet');
     const nextRoom = roomAt(position.current);
     if (nextRoom !== currentRoom.current) { currentRoom.current = nextRoom; onRoomChange(nextRoom); }
     const nextFloor = floorOf(position.current); if (nextFloor !== currentFloor.current) { currentFloor.current = nextFloor; onFloorChange(nextFloor); }
-    cameraTarget.set(position.current[0], y + .95, position.current[1]);
-    // Lift over dollhouse walls before shortening the boom into the character.
-    let foundView = false;
-    for (const side of [cameraSide.current, -cameraSide.current]) {
-      for (const height of [3, 4.1, 5.2, 6.3]) {
-        cameraGoal.set(position.current[0] + 2.8 * side, y + height, position.current[1] + 4.4 * side);
-        boom.copy(cameraGoal).sub(cameraTarget); cameraRay.far = boom.length(); boom.normalize(); cameraRay.set(cameraTarget, boom);
-        const hit = cameraRay.intersectObjects(cameraBlockers.current, false)[0];
-        if (!hit || hit.distance > 3.2) {
-          if (hit) cameraGoal.copy(cameraTarget).addScaledVector(boom, hit.distance - .3);
-          cameraSide.current = side; foundView = true; break;
-        }
-      }
-      if (foundView) break;
+    if(!targetReady.current){cameraTarget.set(position.current[0],y+1.05,position.current[1]);targetReady.current=true;}
+    cameraTarget.lerp(desiredTarget.set(position.current[0],y+1.05,position.current[1]),followWeight(delta,9));
+    // Clearance keeps one viewing direction and eases both height and reach.
+    let desiredHeight:number=FOLLOW_OFFSET[1], desiredReach=1, foundView=false;
+    for(const height of [FOLLOW_OFFSET[1],4.6,5.6]){
+      boom.set(FOLLOW_OFFSET[0],height,FOLLOW_OFFSET[2]);
+      cameraRay.far=boom.length();cameraRay.set(cameraTarget,rayDirection.copy(boom).normalize());
+      const hit=cameraRay.intersectObjects(cameraBlockers.current,false)[0];
+      if(!hit||hit.distance>3.2){desiredHeight=height;desiredReach=hit?Math.max(.4,(hit.distance-.3)/boom.length()):1;foundView=true;break;}
     }
-    if (!foundView) cameraGoal.set(position.current[0] + .7, y + 5.2, position.current[1] + 1.1);
-    camera.position.lerp(cameraGoal, 1 - Math.exp(-5 * delta));
-    boom.copy(camera.position).sub(cameraTarget); cameraRay.far = boom.length(); boom.normalize(); cameraRay.set(cameraTarget, boom);
-    const currentObstruction = cameraRay.intersectObjects(cameraBlockers.current, false)[0];
-    if (currentObstruction) camera.position.copy(cameraGoal);
+    if(!foundView){desiredHeight=5.6;desiredReach=.25;}
+    cameraHeight.current=THREE.MathUtils.damp(cameraHeight.current,desiredHeight,5,Math.min(delta,.1));
+    cameraReach.current=THREE.MathUtils.damp(cameraReach.current,desiredReach,5,Math.min(delta,.1));
+    cameraGoal.copy(cameraTarget).add(boom.set(FOLLOW_OFFSET[0]*cameraReach.current,cameraHeight.current,FOLLOW_OFFSET[2]*cameraReach.current));
+    camera.position.lerp(cameraGoal,followWeight(delta,6));
     camera.lookAt(cameraTarget);
+    if(import.meta.env.DEV){gl.domElement.dataset.avatarPosition=JSON.stringify(position.current);gl.domElement.dataset.cameraPosition=JSON.stringify(camera.position.toArray());gl.domElement.dataset.avatarAction=playerAction?playerAction.kind+':'+playerAction.phase:'none';}
     const perspective = camera as THREE.PerspectiveCamera;
     if (Math.abs(perspective.fov - 46) > .01) { perspective.fov = THREE.MathUtils.damp(perspective.fov, 46, 6, delta); perspective.near = .08; perspective.updateProjectionMatrix(); }
   });
-  const seated=!!playerAction&&playerAction.phase==='active'&&['work','meeting','meal','client','sofa','atlas'].includes(playerAction.kind);
-  return <group ref={avatar} position={[position.current[0], elevation(position.current), position.current[1]]} visible={active}>
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.15, 0]}><ringGeometry args={[0.32, 0.4, 32]} /><meshBasicMaterial color="#628ea0" /></mesh>
+  const seated=!!playerAction&&playerAction.phase==='active'&&['work','meeting','meal','client','sofa','atlas','consult'].includes(playerAction.kind);
+  return <group ref={avatar} position={[position.current[0], elevation(position.current) + FLOOR_SURFACE_HEIGHT, position.current[1]]} visible={active}>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, .025, 0]}><ringGeometry args={[0.32, 0.4, 32]} /><meshBasicMaterial color="#628ea0" /></mesh>
     <CharacterRig color={PALETTE.corporate} hair="#394c5b" pose={pose} seated={seated} speed={active ? 1 : 0} reducedMotion={reducedMotion} expression={gesture.current > 0||playerAction?.phase==='active'&&['talk','wave'].includes(playerAction.pose) ? 'happy' : 'neutral'} />
-    <group position={[0, seated ? 1.58 : 1.88, 0]}><SceneLabel text="FOUNDER" kind="player" /></group>
   </group>;
 }
 

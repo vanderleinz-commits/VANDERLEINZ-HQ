@@ -3,7 +3,7 @@ import { findPath, roomAt, pointDistance } from './navigation.ts';
 import type { Point } from './navigation.ts';
 import { activityGoal, officeOpen } from './simulation.ts';
 import type { Simulation } from './simulation.ts';
-import { lunchSeat, meetingSeat, meetingSlot } from './officeLayout.ts';
+import { lunchSeat, meetingSeat, lunchSlot } from './officeLayout.ts';
 
 export type InteractionKind='chat'|'brainstorm'|'encourage';
 export const interactionLabels:Record<InteractionKind,string>={chat:'Ngobrol santai',brainstorm:'Brainstorm bersama',encourage:'Beri semangat'};
@@ -36,7 +36,7 @@ export function requestInteraction(sim:Simulation,a:number,b:number,kind:Interac
   const lunch=sim.gameMinute>=720&&sim.gameMinute<780;
   if(roomId===2&&lunch) return sim;
   const used=sim.encounters.filter(e=>e.roomId===roomId).flatMap(e=>e.chairs);
-  const seats=roomId===5&&lunch?[meetingSlot(a),meetingSlot(b)]:Array.from({length:7},(_,i)=>i).filter(i=>!used.includes(i)).slice(0,2);
+  const seats=roomId===5?[lunchSlot(a),lunchSlot(b)]:Array.from({length:7},(_,i)=>i).filter(i=>!used.includes(i)).slice(0,2);
   if(seats.length!==2||seats.some(i=>used.includes(i))) return sim;
   const e:Encounter={id:sim.nextEncounterId,participants:[a,b],chairs:seats as [number,number],kind,roomId,slot:seats[0],phase:'approach',elapsed:0,timeout:nowOf(sim)+150};
   return {...sim,npcs:sim.npcs.map((n,i)=>i===a||i===b?{...n,override:null,errandUntil:0,destination:roomId,path:findPath(n.position,interactionGoal(e,i))}:n),encounters:[...sim.encounters,e],nextEncounterId:sim.nextEncounterId+1,events:[staff[a].name+' & '+staff[b].name+' → '+interactionLabels[kind],...sim.events].slice(0,8)};

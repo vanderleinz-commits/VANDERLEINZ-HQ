@@ -1,5 +1,5 @@
 import { rooms, FLOOR_HEIGHT } from './worldData.ts';
-import { furnitureFootprints, roomLocal, meetingSeat, lunchSeat, STAIR_X, STAIR_WIDTH, STAIR_BOTTOM, STAIR_TOP } from './officeLayout.ts';
+import { furnitureFootprints, roomLocal, meetingSeat, lunchSeat, ENTRY_POINT, INTERIOR_DOOR_WIDTH, MAIN_DOOR_WIDTH, STAIR_X, STAIR_WIDTH, STAIR_BOTTOM, STAIR_TOP } from './officeLayout.ts';
 
 export type Point = [number, number, number?];
 type Rect = { x: number; z: number; w: number; d: number; floor: 0 | 1 };
@@ -26,9 +26,9 @@ for (const room of rooms) {
     add(x - opening / 2 - piece / 2, wallZ, piece, .16, room.floor);
     add(x + opening / 2 + piece / 2, wallZ, piece, .16, room.floor);
   };
-  if (room.id === 0) splitWall(z - doorSide * room.depth / 2, 2.1);
+  if (room.id === 0) splitWall(z - doorSide * room.depth / 2, MAIN_DOOR_WIDTH);
   else add(x, z - doorSide * room.depth / 2, room.width, .16, room.floor);
-  splitWall(z + doorSide * room.depth / 2, 1.35);
+  splitWall(z + doorSide * room.depth / 2, INTERIOR_DOOR_WIDTH);
 }
 export function isWalkable(point: Point): boolean {
   const [x, z] = point, y = elevation(point);
@@ -38,7 +38,7 @@ export function isWalkable(point: Point): boolean {
   if (Math.abs(y - floor * FLOOR_HEIGHT) > .025) return false;
   if (floor === 0) {
     if (x < -12.1 || x > 12.1 || z < -5.6 || z > 8.4) return false;
-    if (z > 6.1 && (x < -12.1 || x > -7.5)) return false;
+    if (z > 6.1 && Math.abs(x - ENTRY_POINT[0]) > 2.45) return false;
     if (Math.abs(x - STAIR_X) < STAIR_WIDTH / 2 + radius && z > STAIR_TOP[1] && z < STAIR_BOTTOM[1] - .00001) return false;
   } else {
     if (x < -12.1 || x > 12.1 || z < -5.6 || z > .8) return false;
@@ -59,6 +59,10 @@ function segmentWalkable(a: Point, b: Point): boolean {
 function nearestIndex(point: Point, floor: 0 | 1): number {
   let best = 0, distance = Infinity;
   const requireConnection = isWalkable(point) && Math.abs(elevation(point) - floor * FLOOR_HEIGHT) < .025;
+  const gx = Math.round((point[0] - minX) / step), gz = Math.round((point[1] - minZ) / step);
+  const nearby = [-1, 0, 1].flatMap(dx => [-1, 0, 1].map(dz => [gx + dx, gz + dz])).filter(([x, z]) => x >= 0 && x < columns && z >= 0 && z < rows)
+    .map(([x, z]) => z * columns + x).sort((a, b) => pointDistance(point, pointAt(a, floor)) - pointDistance(point, pointAt(b, floor)));
+  for (const index of nearby) if (free[floor][index] && (!requireConnection || segmentWalkable(point, pointAt(index, floor)))) return index;
   for (let index = 0; index < free[floor].length; index++) {
     if (!free[floor][index]) continue;
     const candidate = pointAt(index, floor);
@@ -80,6 +84,7 @@ export function station(roomId: number, index: number): Point {
 }
 function floorPath(from: Point, to: Point, floor: 0 | 1): Point[] {
   if (pointDistance(from, to) < .00001) return [];
+  if (isWalkable(from) && segmentWalkable(from, to)) return [[...to]];
   const start = nearestIndex(from, floor), goal = nearestIndex(to, floor);
   const previous = new Int32Array(free[floor].length).fill(-1), queue = [start];
   previous[start] = start;
@@ -95,9 +100,24 @@ function floorPath(from: Point, to: Point, floor: 0 | 1): Point[] {
   const route: Point[] = [];
   for (let cursor = goal; cursor !== start; cursor = previous[cursor]) route.push(pointAt(cursor, floor));
   route.push(pointAt(start, floor)); route.reverse();
-  if (isWalkable(to) && pointDistance(route.at(-1)!, to) > .00001) route.push([...to]);
+  if (isWalkable(to)) {
+    if (pointDistance(route.at(-1)!, to) > .00001) route.push([...to]);
+    else route[route.length - 1] = [...to];
+  }
   if (pointDistance(route[0], from) < .00001) route.shift();
-  return route;
+  const corners = route.filter((point, index) => {
+    if (index === 0 || index === route.length - 1) return true;
+    const before = route[index - 1], after = route[index + 1];
+    return Math.abs((point[0] - before[0]) * (after[1] - point[1]) - (point[1] - before[1]) * (after[0] - point[0])) > .00001;
+  });
+  const smooth: Point[] = [];
+  let cursor = from, next = 0;
+  while (next < corners.length) {
+    let farthest = next;
+    for (let candidate = corners.length - 1; candidate > next; candidate--) if (segmentWalkable(cursor, corners[candidate])) { farthest = candidate; break; }
+    smooth.push(corners[farthest]); cursor = corners[farthest]; next = farthest + 1;
+  }
+  return smooth;
 }
 function stairPath(from: Point, to: Point): Point[] {
   const count = Math.max(1, Math.ceil(pointDistance(from, to) / .22));
@@ -108,6 +128,7 @@ function stairPath(from: Point, to: Point): Point[] {
 }
 const rampInterior = (point: Point) => onStairs(point) && elevation(point) > .025 && elevation(point) < FLOOR_HEIGHT - .025;
 export function findPath(from: Point, to: Point): Point[] {
+  if (!isWalkable(to)) return [];
   if (pointDistance(from, to) < .00001) return [];
   if (rampInterior(from) && rampInterior(to)) return stairPath(from, to);
   if (rampInterior(from)) {

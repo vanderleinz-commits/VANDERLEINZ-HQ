@@ -32,7 +32,7 @@ function RoomLabel({ room, selected }: { room: Room; selected: boolean }) {
   useEffect(() => () => texture.dispose(), [texture]);
   return <sprite scale={[Math.max(1.85, Math.min(3.7, text.length * 0.125 + 0.4)), 0.42, 1]} renderOrder={10}><spriteMaterial map={texture} transparent depthTest={false} depthWrite={false} toneMapped={false} /></sprite>;
 }
-function RoomWalls({ room, selected, onSelect }: { room: Room; selected: boolean; onSelect: () => void }) {
+function RoomWalls({ room, selected, onSelect, showLabel }: { room: Room; selected: boolean; onSelect: () => void; showLabel: boolean }) {
   const [x, z] = room.center, width = room.width, depth = room.depth, y = room.floor * FLOOR_HEIGHT;
   const side = z < 0 ? 1 : -1, height = 1.72, doorWidth = 1.5, segment = (width - doorWidth) / 2;
   const wallColor = selected ? '#F1F5F6' : room.id === 3 || room.id === 7 ? '#E0EAF2' : PALETTE.cream;
@@ -59,7 +59,7 @@ function RoomWalls({ room, selected, onSelect }: { room: Room; selected: boolean
         {[-0.35, 0.35].map((dy) => <Block key={dy} position={[0, dy, side * 0.02]} size={[Math.min(2.12, width - 0.58), 0.04, 0.055]} color="#c9dce9" />)}
       </group>}
     </>}
-    <group position={[0, 2.11, side * (depth / 2 - 0.21)]}><RoomLabel room={room} selected={selected} /></group>
+    {showLabel&&<group position={[0, 2.11, side * (depth / 2 - 0.21)]}><RoomLabel room={room} selected={selected} /></group>}
   </group>;
 }
 function Stairs() {
@@ -86,9 +86,9 @@ function BalconyRails() {
   </group>;
 }
 
-export function BuildingShell({ floorView, selectedRoom, onSelectRoom }: { floorView: FloorView; selectedRoom: number; onSelectRoom: (id: number) => void }) {
+export function BuildingShell({ floorView, selectedRoom, onSelectRoom, showLabels=true }: { floorView: FloorView; selectedRoom: number; onSelectRoom: (id: number) => void; showLabels?: boolean }) {
   const upper = floorView !== 0;
-  return <group userData={{ cameraObstacle: true }}>
+  return <group userData={{ cameraObstacle: true, cameraStructure: true }}>
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.49, 0]} receiveShadow><planeGeometry args={[200, 200]} /><meshStandardMaterial color="#C6DAE6" roughness={1} /></mesh>
     <Block position={[0, -0.25, 0]} size={[25.0, 0.48, 12.15]} color={PALETTE.midnight} />
     <Block position={[0, 0.025, 0]} size={[24.6, 0.085, 11.8]} color={PALETTE.cloud} />
@@ -104,7 +104,7 @@ export function BuildingShell({ floorView, selectedRoom, onSelectRoom }: { floor
       {[-12.14, 12.14].flatMap((x) => [-5.75, 0.7].map((z) => <Block key={`${x}${z}`} position={[x, FLOOR_HEIGHT / 2 - 0.08, z]} size={[0.18, FLOOR_HEIGHT - 0.08, 0.18]} color="#98b4c8" />))}
       <BalconyRails />
     </>}
-    {rooms.filter((room) => floorView === 'all' || room.floor === floorView).map((room) => <RoomWalls key={room.id} room={room} selected={selectedRoom === room.id} onSelect={() => onSelectRoom(room.id)} />)}
+    {rooms.filter((room) => floorView === 'all' || room.floor === floorView).map((room) => <RoomWalls key={room.id} room={room} selected={selectedRoom === room.id} onSelect={() => onSelectRoom(room.id)} showLabel={showLabels} />)}
     <Stairs />
   </group>;
 }

@@ -2,6 +2,7 @@ import { PALETTE } from './artDirection.ts';
 import { characterProfiles } from './characterProfiles.ts';
 
 export const FLOOR_HEIGHT = 3.8;
+export const FLOOR_SURFACE_HEIGHT = .12;
 export type Room = { id: number; name: string; kind: string; icon: string; center: [number, number]; tint: string; summary: string; floor: 0 | 1; width: number; depth: number };
 export type Staff = { name: string; role: string; roomId: number; color: string; hair: string; offset: [number, number] };
 
@@ -28,7 +29,7 @@ const staffWorkplaces: { roomId: number; offset: [number, number] }[] = [
   { roomId: 1, offset: [3.1, .7] },
   { roomId: 6, offset: [.9, .5] },
   { roomId: 0, offset: [1.4, -.65] },
-  { roomId: 4, offset: [-.7, -1.15] },
+  { roomId: 4, offset: [-1.15, -.8] },
 ];
 export const staff: Staff[] = staffWorkplaces.map((workplace, index) => {
   const { name, role, color, hair } = characterProfiles[index];

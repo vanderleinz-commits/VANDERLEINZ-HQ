@@ -6,7 +6,7 @@ import type { InteractionKind } from '../src/social.ts';
 import { isWalkable, roomAt, moveAlong } from '../src/navigation.ts';
 import { quietSimulation } from './helpers.ts';
 import { STAFF_WORKERS } from '../src/worldData.ts';
-import { lunchSeat, meetingSlot } from '../src/officeLayout.ts';
+import { lunchSeat, lunchSlot } from '../src/officeLayout.ts';
 
 const advance = (sim: ReturnType<typeof createSimulation>, minutes: number) => {
   for (let i = 0; i < minutes * 5; i++) sim = stepSimulation(sim, 0.2, 1);
@@ -73,7 +73,7 @@ test('busy workers, Amanda, absent workers, office closure, and a daily meeting 
   assert.equal(requestInteraction(lunch, 0, 1, 'chat', 2), lunch);
 });
 
-test('Akbar can join worker conversations and has bonds with all six colleagues', () => {
+test('Felin can join worker conversations and has bonds with all six colleagues', () => {
   const base = availableOffice();
   let sim = requestInteraction(base, 7, 4, 'chat');
   assert.equal(sim.encounters.length, 1);
@@ -83,10 +83,21 @@ test('Akbar can join worker conversations and has bonds with all six colleagues'
   assert.equal(sim.bonds[bondKey(7, 4)], 33);
 });
 
+test('a pantry conversation leaves an unrelated worker’s break chair free', () => {
+  const base=availableOffice();
+  base.npcs[0].override={activity:'break',until:absoluteMinute(base)+45};
+  base.npcs[0].position=lunchSeat(lunchSlot(0)).position;
+  base.npcs[0].path=[];
+  const sim=requestInteraction(base,1,2,'chat');
+  assert.equal(sim.encounters.length,1);
+  assert.deepEqual(sim.encounters[0].chairs,[lunchSlot(1),lunchSlot(2)]);
+  for(const participant of [1,2])assert.notDeepEqual(interactionGoal(sim.encounters[0],participant),base.npcs[0].position);
+});
+
 test('lunch creates three pairs with distinct chair anchors and leaves Amanda at reception', () => {
   let sim = availableOffice(725);
   sim.npcs.forEach((npc) => { npc.nextSocialAt = 0; });
-  for (const index of STAFF_WORKERS) sim.npcs[index].position = lunchSeat(meetingSlot(index)).position;
+  for (const index of STAFF_WORKERS) sim.npcs[index].position = lunchSeat(lunchSlot(index)).position;
   const amanda = structuredClone(sim.npcs[6].position);
   sim = stepSimulation(sim, 0.2, 1);
   assert.equal(sim.encounters.length, 3);
