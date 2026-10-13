@@ -9,6 +9,8 @@ import { CLIENT_VARIANT_START, characterProfile, defaultCharacterProfiles } from
 import { newOfficeServices, recipientKey, drinkPlacement, nextCleaningRoom } from './officeServices.ts';
 import type { OfficeServices, DrinkRecipient } from './officeServices.ts';
 import { moveInCrowd } from './crowd.ts';
+import { PROJECT, projectAssignment, projectBeat, projectGoal, projectSeat } from './projectStory.ts';
+import type { ProjectMark } from './projectStory.ts';
 
 export const activityLabels={prepare:'Bersiap di kantor',work:'Bekerja',meeting:'Rapat tim',break:'Istirahat',lunch:'Makan siang',leave:'Pulang',offsite:'Di luar kantor',checkin:'Absen masuk',checkout:'Absen pulang',reception:'Melayani tamu',private:'Diskusi proyek',client:'Menemui client',inspect:'Memeriksa pekerjaan tim',repair:'Memperbaiki komputer',read:'Membaca buku',toilet:'Menggunakan WC',drink:'Mengambil minum',cook:'Memasak di pantry',hr:'Konsultasi HRD',waiting:'Komputer bermasalah',coffee:'Menyiapkan dan mengantar kopi',clean:'Membersihkan kantor',support:'Mendampingi pertemuan client'};
 export type Activity=keyof typeof activityLabels;
@@ -21,11 +23,12 @@ export type NpcState={
  override:{activity:'work'|'break';until:number}|null;breakPlan:BreakPlan|null;queueJoinedAt:number|null;
 };
 export type MeetingPlan={day:number;start:number;duration:30|45|60;phase:'scheduled'|'gathering'|'discussing'|'done';elapsed:number};
-export type ClientState={id:number;name:string;variant:number;target:'owner'|'atlas'|'both';ownerJoined:boolean;seatSlot:1|3;position:Point;path:Point[];phase:'arriving'|'waiting'|'served'|'meeting'|'leaving'|'offsite';stayUntil:number;teamCalled?:boolean;supportWaitUntil?:number};
+export type ClientState={id:number;name:string;variant:number;target:'owner'|'atlas'|'both';ownerJoined:boolean;seatSlot:1|3;position:Point;path:Point[];phase:'arriving'|'waiting'|'served'|'meeting'|'leaving'|'offsite';stayUntil:number;teamCalled?:boolean;supportWaitUntil?:number;projectId?:string};
 export type AttendanceEntry={day:number;name:string;kind:'in'|'out'|'client';at:number};
 export type ReceptionState={person:number|null;client:boolean;mode:'in'|'out'|'visitor';phase:'approach'|'service';elapsed:number;log:AttendanceEntry[]};
 export type ComputerIssue={owner:number;reportedAt:number;resolvedAt:number|null};
 export type Simulation={
+ project?:ProjectMark;
  gameDay:number;gameMinute:number;credits:number;hqPoints:number;ownerRoom:number|null;ownerActive:boolean;ownerActivity:string|null;ownerCheckedIn:boolean;npcs:NpcState[];events:string[];encounters:Encounter[];bonds:Record<string,number>;completedInteractions:number;nextEncounterId:number;meeting:MeetingPlan;
  reception:ReceptionState;computerIssues:ComputerIssue[];clients:ClientState[];nextClientId:number;rng:number;nextManagementAt:number;nextIssueAt:number;nextClientAt:number;managementRound:number;completedDuties:Record<DutyKind,number>;services:OfficeServices;
 };
@@ -89,6 +92,7 @@ function baselineActivity(s:Simulation,i:number):Activity {
  if(n.presence==='offsite')return 'offsite';if(n.presence==='leaving')return 'leave';
  if(n.presence==='arriving'||n.presence==='checking-in')return 'checkin';if(n.presence==='checking-out')return 'checkout';
  if(i===6&&!n.duty)return !officeOpen(s.gameMinute)||s.reception.person!==null?'reception':planned==='prepare'?'prepare':'work';
+ const assignment=projectAssignment(s.project,s.gameDay,s.gameMinute,i);if(assignment&&planned==='work')return assignment.place==='desk'?'work':assignment.place==='repair'?'repair':'meeting';
  if(n.duty&&['client','support'].includes(n.duty.kind))return n.duty.kind;if(planned==='work'&&activeMeeting(s)&&i<6)return 'meeting';if(n.duty)return n.duty.kind;if(planned==='lunch')return 'lunch';
  if(planned==='work'&&n.override&&n.override.until>absoluteMinute(s))return n.override.activity;
  return planned==='work'&&computerBroken(s,i)?'waiting':planned;
@@ -121,6 +125,7 @@ function coffeeServiceGoal(s:Simulation,index:number):Point {
 export function activityGoal(s:Simulation,i:number):Point {
  const n=s.npcs[i];if(n.presence==='offsite'||n.presence==='leaving')return outside(i);if(i===6&&n.duty)return dutyGoal(s,i);if(i===6)return RECEPTION_POST;
  if(['arriving','checking-in','checking-out'].includes(n.presence))return s.reception.person===i&&!s.reception.client?ATTENDANCE_POINT:queuePoint(s,i);
+ const assignment=projectAssignment(s.project,s.gameDay,s.gameMinute,i);if(assignment&&schedule(s.gameMinute)==='work')return projectGoal(assignment);
  const encounter=encounterFor(s,i);if(encounter)return interactionGoal(encounter,i);
  if(i===9&&s.services.coffee?.recipient.kind==='staff'&&s.services.coffee.recipient.id===9&&s.services.coffee.phase!=='prepare')return workSeat(9).position;
  if(i===7&&!n.duty&&s.ownerActive&&s.ownerRoom===4&&s.ownerActivity==='consult')return hrdSeat(1).position;
@@ -130,6 +135,7 @@ export function activityGoal(s:Simulation,i:number):Point {
 }
 export function seatedAt(s:Simulation,i:number):Seat|null {
  const n=s.npcs[i];if(!n||n.presence!=='inside'||n.path.length||n.activity==='prepare')return null;
+ const assignment=projectAssignment(s.project,s.gameDay,s.gameMinute,i);if(assignment&&schedule(s.gameMinute)==='work'){const seat=projectSeat(assignment);return seat&&pointDistance(n.position,seat.position)<.1?seat:null;}
  let seat:Seat|null=null;const e=encounterFor(s,i);
  if(i===9&&s.services.coffee?.recipient.kind==='staff'&&s.services.coffee.recipient.id===9&&s.services.coffee.phase!=='prepare')seat=workSeat(9);
  if(e)seat=(e.roomId===2?meetingSeat:lunchSeat)(e.chairs[e.participants[0]===i?0:1]);
@@ -143,6 +149,7 @@ export function seatedAt(s:Simulation,i:number):Seat|null {
 export function npcPose(s:Simulation,i:number):string {
  const n=s.npcs[i];if(n.path.length)return onStairs(n.position)?'stairs':i===8&&s.services.coffee?.phase==='carry'?'carry':'walk';if(n.greetUntil>absoluteMinute(s))return 'wave';
  if(['checking-in','checking-out'].includes(n.presence))return s.reception.person===i&&!s.reception.client?'sign':'idle';
+ const assignment=projectAssignment(s.project,s.gameDay,s.gameMinute,i);if(assignment&&n.presence==='inside')return assignment.place==='repair'?'repair':assignment.place==='desk'?assignment.mood==='angry'||assignment.mood==='tired'?'think':'work':assignment.place==='library'?'read':'talk';
  if(i===9&&s.services.coffee?.recipient.kind==='staff'&&s.services.coffee.recipient.id===9&&s.services.coffee.phase!=='prepare')return 'idle';
  if(i===6&&!n.duty)return s.reception.person!==null?'talk':'idle';if(n.duty?.phase==='active')return ['private','client','support'].includes(n.duty.kind)||n.duty.kind==='hr'&&i!==7?'talk':n.duty.kind==='coffee'?s.services.coffee?.phase==='prepare'?'brew':'deliver':n.duty.kind==='toilet'?'toilet':n.duty.kind==='hr'?'read':n.duty.kind;
  if(i===7&&s.ownerActive&&s.ownerRoom===4&&s.ownerActivity==='consult')return 'talk';
@@ -182,6 +189,7 @@ function startDuty(s:Simulation,i:number,kind:DutyKind,target:number,duration:nu
 }
 function availableForDuty(s:Simulation,i:number){return s.npcs[i].presence==='inside'&&!s.npcs[i].duty&&!s.npcs[i].override&&!encounterFor(s,i)&&!activeMeeting(s)&&!(s.services.coffee?.recipient.kind==='staff'&&s.services.coffee.recipient.id===i);}
 function scheduleDuties(s:Simulation) {
+ if(s.project)return;
  const now=absoluteMinute(s),planned=schedule(s.gameMinute);if(!['work','lunch'].includes(planned)||activeMeeting(s))return;
  if(planned==='work'&&now>=s.nextIssueAt){
   if(!s.computerIssues.some(issue=>issue.resolvedAt===null)){const owners=[0,1,2,3,4,7,-1],owner=owners[Math.floor(random(s)*owners.length)];s.computerIssues=[...s.computerIssues.slice(-8),{owner,reportedAt:now,resolvedAt:null}];event(s,'Komputer '+(owner===-1?'Founder':staff[owner].name)+' bermasalah. '+staff[5].name+' menerima permintaan bantuan.');}s.nextIssueAt=now+80+random(s)*70;
@@ -266,6 +274,7 @@ function advanceCoffee(s:Simulation,elapsed:number) {
  else{n.duty=null;s.services.coffee=null;s.services.nextCoffeeAt=now+1;}
 }
 function assignClientSupport(s:Simulation,client:ClientState) {
+ if(client.projectId)return;
  if(client.teamCalled||schedule(s.gameMinute)!=='work'||!client.ownerJoined&&!s.npcs.some(n=>n.duty?.kind==='client'&&n.duty.target===client.id&&n.duty.phase==='active')||s.npcs.some(n=>n.duty?.kind==='support'&&n.duty.target===client.id))return;
  const candidates=[1,3,4,2,5,7].filter(i=>availableForDuty(s,i)&&s.npcs[i].activity==='work').sort((a,b)=>((a+client.id)%6)-((b+client.id)%6));
  for(const [slot,i] of candidates.slice(0,client.id%2+1).entries()){startDuty(s,i,'support',client.id,25);s.npcs[i].duty!.seatSlot=(client.seatSlot===3?6:4)+slot;}
@@ -308,7 +317,7 @@ function advanceDuties(s:Simulation,elapsed:number) {
 export const clientWaitingPoint=(client:ClientState):Point=>roomLocal(0,-1.2+(client.seatSlot===3?-.85:0),-1.75);
 function moveClients(s:Simulation,elapsed:number,extraObstacles:Point[]) {
  const now=absoluteMinute(s);
- if(officeOpen(s.gameMinute)&&s.gameMinute>=570&&now>=s.nextClientAt&&s.clients.filter(client=>client.phase!=='offsite').length<2){
+ if(!s.project&&officeOpen(s.gameMinute)&&s.gameMinute>=570&&now>=s.nextClientAt&&s.clients.filter(client=>client.phase!=='offsite').length<2){
   const id=s.nextClientId++,names=['Maya','Raka','Nadia','Dimas','Sinta','Bima'],roll=random(s),target:ClientState['target']=roll<.44?'owner':roll<.74?'atlas':'both';
   const used=new Set(s.clients.filter(client=>client.phase!=='offsite').map(client=>client.seatSlot));
   const seatSlot:1|3=used.has(1)?3:1;
@@ -332,7 +341,7 @@ function moveClients(s:Simulation,elapsed:number,extraObstacles:Point[]) {
   if(arrived&&client.phase==='served'){client.phase='meeting';client.stayUntil=now+999;event(s,client.name+' menunggu di Client Meeting Room.');}
   if(arrived&&client.phase==='leaving')client.phase='offsite';return client;
  });
- for(const client of s.clients){if(client.phase!=='meeting')continue;if(['atlas','both'].includes(client.target)){const atlas=s.npcs[0];if(!atlas.duty&&availableForDuty(s,0))startDuty(s,0,'client',client.id,30);}assignClientSupport(s,client);}
+ for(const client of s.clients){if(client.phase!=='meeting'||client.projectId)continue;if(['atlas','both'].includes(client.target)){const atlas=s.npcs[0];if(!atlas.duty&&availableForDuty(s,0))startDuty(s,0,'client',client.id,30);}assignClientSupport(s,client);}
 }
 function serveReception(s:Simulation,elapsed:number) {
  const now=absoluteMinute(s),amanda=s.npcs[6],r=s.reception;
@@ -362,7 +371,9 @@ function serveReception(s:Simulation,elapsed:number) {
  }
 }
 function tick(current:Simulation,elapsed:number,extraObstacles:Point[]):Simulation {
- const total=current.gameMinute+elapsed,gameDay=current.gameDay+Math.floor(total/1440),gameMinute=total%1440,now=(gameDay-1)*1440+gameMinute;
+ const limit=current.project?.id===PROJECT.id&&current.gameDay===PROJECT.deadlineDay?PROJECT.deadlineMinute:1440+elapsed;
+ const total=Math.min(limit,current.gameMinute+elapsed),gameDay=current.gameDay+Math.floor(total/1440),gameMinute=total%1440,now=(gameDay-1)*1440+gameMinute;
+ const clockElapsed=Math.max(0,now-absoluteMinute(current));
 
  const s:Simulation={...current,gameDay,gameMinute,npcs:current.npcs.map(n=>({...n,duty:n.duty?{...n.duty}:null,breakPlan:n.breakPlan?{...n.breakPlan}:null})),meeting:gameDay===current.gameDay?{...current.meeting}:planMeeting(gameDay),events:[...current.events],reception:{...current.reception,log:[...current.reception.log]},computerIssues:current.computerIssues.map(i=>({...i})),clients:current.clients.map(c=>({...c})),completedDuties:{...current.completedDuties},services:{...current.services,served:[...current.services.served],drinks:[...current.services.drinks],coffee:current.services.coffee?{...current.services.coffee,recipient:{...current.services.coffee.recipient}}:null,catering:{...current.services.catering},cleanedRooms:[...current.services.cleanedRooms]}};
  if(gameDay!==current.gameDay){s.npcs=s.npcs.map((n,i)=>({...n,attendanceIn:null,attendanceOut:null,nextLeisureAt:now+520+i*17,breakPlan:null,queueJoinedAt:null}));s.clients=[];s.reception.person=null;s.ownerCheckedIn=false;s.nextManagementAt=now+500;s.nextIssueAt=now+540;s.nextClientAt=now+580;s.nextClientId=0;s.managementRound=0;s.services=newOfficeServices(gameDay,now);}
@@ -377,6 +388,16 @@ function tick(current:Simulation,elapsed:number,extraObstacles:Point[]):Simulati
   if(officeOpen(gameMinute)&&npc.presence==='offsite'&&gameMinute>=arrivalMinute(i)){npc.presence='arriving';npc.position=outside(i);npc.path=[];npc.queueJoinedAt=now;event(s,npc.name+' tiba di pintu kantor.');}
   if(npc.override&&npc.override.until<=now)npc.override=null;return npc;
  });
+ if(s.project){
+  s.meeting={...s.meeting,phase:'done'};
+  const beat=projectBeat(gameDay,gameMinute),key=beat?.id??`routine-${gameDay}-${schedule(gameMinute)}`;
+  if(key!==s.project.beat){s.project={...s.project,beat:key};s.encounters=[];if(beat)event(s,'PROYEK DANI · '+beat.title);}
+  s.npcs=s.npcs.map((n,i)=>projectAssignment(s.project,gameDay,gameMinute,i)?{...n,duty:null,override:null}:n);
+  if(gameDay===3&&gameMinute>=870&&!s.clients.some(c=>c.projectId===PROJECT.id)){
+   const id=s.nextClientId++;s.clients.push({id,name:PROJECT.client,variant:CLIENT_VARIANT_START,target:'both',ownerJoined:false,seatSlot:1,position:outside(id+10),path:[],phase:'arriving',stayUntil:0,projectId:PROJECT.id});
+   event(s,'Client A tiba untuk mengambil video Dani. Amanda menyiapkan pertemuan dengan Founder dan Atlas.');
+  }
+ }
  scheduleDuties(s);
  scheduleServices(s);
  s.npcs=s.npcs.map((original,i)=>{
@@ -388,7 +409,7 @@ function tick(current:Simulation,elapsed:number,extraObstacles:Point[]):Simulati
   if(!n.path.length&&pointDistance(n.position,goal)<.08&&n.presence==='leaving'){n.presence='offsite';event(s,n.name+' meninggalkan kantor.');}
   s.npcs[i]=n;n.activity=e?e.roomId===2?'meeting':schedule(gameMinute)==='lunch'?'lunch':'break':baselineActivity(s,i);
   const working=n.presence==='inside'&&!n.path.length&&n.activity==='work'&&!n.duty&&!e,relaxing=n.presence==='offsite'||!n.path.length&&['lunch','break','drink','cook','read'].includes(n.activity);
-  n.energy=clamp(n.energy+elapsed*(relaxing?.3:-.03));n.focus=clamp(n.focus+elapsed*(relaxing?.5:working?-.05:-.008));n.social=clamp(n.social+elapsed*(relaxing?.12:-.012));n.workMinutes+=working?Math.max(0,elapsed-m.distanceUsed/WALK_SPEED):0;
+  n.energy=clamp(n.energy+clockElapsed*(relaxing?.3:-.03));n.focus=clamp(n.focus+clockElapsed*(relaxing?.5:working?-.05:-.008));n.social=clamp(n.social+clockElapsed*(relaxing?.12:-.012));n.workMinutes+=working?Math.max(0,clockElapsed-m.distanceUsed/WALK_SPEED):0;
   if(n.workMinutes>=60){const rewards=Math.floor(n.workMinutes/60)*10;s.credits+=rewards;n.workMinutes%=60;event(s,n.name+' menyelesaikan pekerjaan · +'+rewards+' HQ Credits');}return n;
  });
  moveClients(s,elapsed,extraObstacles);serveReception(s,elapsed);advanceDuties(s,elapsed);

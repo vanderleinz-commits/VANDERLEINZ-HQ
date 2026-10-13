@@ -1,5 +1,16 @@
 # Blue and Space Headquarters — Phase 01 QA
 
+## Versi 0.8.0 · Proyek Dani · 13 Oktober 2026
+
+- [x] 79 tes lulus, 0 gagal; pemeriksaan final 2,02 detik. Termasuk simulasi tiga hari dengan perpindahan, kursi rapat/perpustakaan/HR, absensi Client A, deadline yang menunggu Founder, baseline saldo, reset sesi, keputusan, revisi dan kegagalan penyimpanan.
+- [x] Build TypeScript/Vite berhasil: 620 modul, 6,14 detik. Index 381,96 kB gzip; peringatan chunk besar masih ada.
+- [x] Browser lokal: awal Senin 06:00 pause, tombol mulai, refresh mengulang proyek, Client A menunggu Rabu 16:00, Founder berjalan dari bawah melalui tangga dan duduk di ruang meeting client. Hasil terbuka sesudah pertemuan.
+- [x] Video dari panel diputar sampai ended=true, currentTime=14, tanpa error; metadata 1280 × 720 dan durasi 14 detik. Video sumber juga didekode penuh: 420 frame, H.264 High/yuv420p, AAC LC stereo, faststart.
+- [x] Tombol diterima terbuka setelah pemeriksaan hasil; keputusan diterima bertahan setelah reload. Dalam origin lokal terpisah tombol revisi ditolak tanpa catatan, menerima catatan dan bertahan setelah reload.
+- [x] Console browser sesi pengujian tidak mencatat error/warning.
+- Pengujian tiga hari browser memakai tombol QA pengembangan yang menjalankan substep simulasi lengkap. Tidak menunggu 58 menit waktu nyata; kecepatan dan kalender diperiksa oleh tes simulasi. Tombol QA dibuang dari build produksi.
+- Keputusan tetap lokal per browser. Revisi dari chat memerlukan paket versi baru. Jam deadline sengaja menunggu keputusan; waktu kantor kembali berjalan sesudah diterima atau meminta revisi.
+
 ## Versi 0.7.0 · 13 Oktober 2026
 
 Kantor sekarang memiliki **13 ruangan, 10 NPC, 9 pekerja yang dilayani Amanda, dan avatar pemilik**. Panjang dan lebar layout bertambah 30%; luas ruangan menjadi sekitar 1,69× sebelumnya. Catatan di bawah memisahkan hasil versi ini dari pengukuran Phase 01 lama. Tanda tanpa centang berarti belum diverifikasi, bukan hasil lulus.

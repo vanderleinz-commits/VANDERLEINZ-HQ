@@ -8,7 +8,7 @@ import { rooms, staff, taskLabels, STAFF_WORKERS, FLOOR_HEIGHT, FLOOR_SURFACE_HE
 import type { Room, Staff } from './worldData';
 import { moveAvatar, isWalkable, findPath, roomAt, elevation, floorOf, onStairs, pointDistance } from './navigation';
 import type { Point } from './navigation';
-import { loadGame, stepSimulation, assignActivity, greet, joinClientMeeting, recordOwnerAttendance, setOwnerRoom, setOwnerEngagement, absoluteMinute, activityLabels, SAVE_KEY, weekdayName, officeOpen, seatedAt, meetingDialogue, schedule, npcPose, routineDialogue, computerBroken } from './simulation';
+import { stepSimulation, assignActivity, greet, joinClientMeeting, recordOwnerAttendance, setOwnerRoom, setOwnerEngagement, absoluteMinute, activityLabels, SAVE_KEY, weekdayName, officeOpen, seatedAt, meetingDialogue, schedule, npcPose, routineDialogue, computerBroken } from './simulation';
 import type { SaveData, Simulation, NpcState } from './simulation';
 import { requestInteraction, cancelInteraction, encounterFor, interactionLabels, interactionDuration, dialogueFor, bondKey, bondLabel } from './social';
 import type { InteractionKind } from './social';
@@ -28,6 +28,10 @@ import { OfficeServicesVisual } from './OfficeServicesVisual';
 import { crowdClear, moveInCrowd } from './crowd';
 import type { CrowdPerson } from './crowd';
 import { FOLLOW_OFFSET, avatarDirection, followWeight } from './avatarCamera';
+import { ProjectPanel } from './ProjectPanel';
+import { loadProjectGame, readProjectDecision, decideProject, PROJECT_RESULT_KEY } from './projectSession';
+import type { ProjectDecision } from './projectSession';
+import { PROJECT, projectAssignment, projectDialogue } from './projectStory';
 
 const VisualStudio = lazy(() => import('./VisualStudio'));
 
@@ -48,6 +52,8 @@ function staffStatus(simulation: Simulation, index: number): string {
   if (npc.presence === 'checking-out') return 'Absensi pulang dengan Amanda';
   if (npc.presence === 'leaving') return 'Pulang melalui pintu utama';
   if (npc.presence === 'arriving') return 'Tiba · menuju resepsionis';
+  const assignment=projectAssignment(simulation.project,simulation.gameDay,simulation.gameMinute,index);
+  if(assignment)return `${npc.path.length?'Menuju · ':''}${assignment.task} · ${({neutral:'tenang',happy:'senang',focused:'fokus',tired:'capek',stressed:'stres',angry:'kesal'} as const)[assignment.mood]}`;
   if (npc.duty) return (npc.path.length ? 'Menuju · ' : '') + dutyLabels[npc.duty.kind];
   if (computerBroken(simulation, index)) return 'Komputer bermasalah · menunggu NEXUS';
   const encounter = encounterFor(simulation, index);
@@ -61,7 +67,8 @@ function FloorControls({ value, onChange }: { value: FloorView; onChange: (value
 
 function App() {
   useCharacterRevision();
-  const [initial] = useState(loadGame);
+  const [initial] = useState(loadProjectGame);
+  const [projectDecision,setProjectDecision]=useState<ProjectDecision|null>(()=>{try{return readProjectDecision();}catch{return null;}});
   const [selectedRoom, setSelectedRoom] = useState(initial.roomId);
   const [floorView, setFloorView] = useState<FloorView>(initial.floorView ?? rooms[initial.roomId].floor);
   const [mode, setMode] = useState<'director' | 'avatar'>(initial.mode);
@@ -107,6 +114,13 @@ function App() {
   const canOrder = selectedNpc !== null && selectedNpc !== 6 && inspected?.presence === 'inside' && !inspected.duty && schedule(gameMinute) === 'work' && !meetingActive;
   const canSocial = selectedNpc !== null && selectedNpc !== 6 && inspected?.presence === 'inside' && !inspected.duty && npcs[partner]?.presence === 'inside' && !npcs[partner]?.duty && officeOpen(gameMinute) && !meetingActive;
   latestSave.current = { version: 5, simulation, roomId: selectedRoom, floorView, mode, speed, reducedMotion, avatar: avatarPosition.current, savedAt };
+
+  useEffect(()=>{
+    const returned=(event:PageTransitionEvent)=>{if(event.persisted&&latestSave.current.simulation.project)window.location.reload();};
+    const synchronized=(event:StorageEvent)=>{if(event.key===PROJECT_RESULT_KEY)window.location.reload();};
+    window.addEventListener('pageshow',returned);window.addEventListener('storage',synchronized);
+    return()=>{window.removeEventListener('pageshow',returned);window.removeEventListener('storage',synchronized);};
+  },[]);
 
   useEffect(() => {
     let previous = performance.now();
@@ -211,7 +225,7 @@ function App() {
 
 
   return (
-    <main className={`game-shell ${mode === 'avatar' ? 'avatar-mode' : ''} ${hideInterface ? 'ui-hidden' : ''}`}>
+    <main className={`game-shell ${simulation.project?'has-project':''} ${mode === 'avatar' ? 'avatar-mode' : ''} ${hideInterface ? 'ui-hidden' : ''}`}>
       <section className="world-view" aria-label={`${BRAND.name} · 3D office world`}>
         <Canvas shadows="soft" frameloop={showStudio ? 'never' : 'always'} dpr={[1, GRAPHICS[quality].dpr]} camera={{ position: [25, 27, 34], fov: 34 }} gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1 }}>
           <color attach="background" args={[daylight(gameMinute) > 0.2 ? '#DFEAF4' : '#91A9C4']} />
@@ -342,6 +356,16 @@ function App() {
         <div className="world-legend"><span className="legend-dot" /> COZY MINIATURE WORLD <i>·</i> BLUE / CREAM / WOOD</div>
         {toast && <div role="status" className="toast-message"><span>✓</span>{toast}</div>}
         {(savedAt || saveError) && <div role="status" className="saved-indicator">{saveError ? '⚠ Local save unavailable' : '● Autosave on · local browser'}</div>}
+        {import.meta.env.DEV&&new URLSearchParams(location.search).get('qa')==='project'&&simulation.project&&<button style={{position:'absolute',bottom:8,left:8,zIndex:60}} onClick={()=>{setSimulation(current=>stepSimulation(current,3480,1));setSpeed(1);}}>QA lokal: simulasikan sampai penyerahan</button>}
+        {!showStudio&&<ProjectPanel simulation={simulation} decision={projectDecision} speed={speed} onStart={()=>setSpeed(1)} onFocus={focusRoom} onJoin={()=>{
+          const client=simulation.clients.find(c=>c.projectId===PROJECT.id);if(!client)return;
+          setMode('avatar');setFloorView(floorOf(avatarPosition.current));setMobilePanel(null);setSelectedNpc(null);setSpeed(1);
+          const seat=clientMeetingSeat(0);setPlayerAction({id:nextPlayerAction.current++,kind:'client',goal:seat.position,pose:'talk',rotation:seat.rotation,duration:0,phase:'travel',startedAt:0,targetId:client.id});
+          touchKeys.current.clear();setToast('Founder berjalan menuju kursi penyerahan.');
+        }} onDecide={(choice,note)=>{
+          try{const decision=decideProject(latestSave.current,choice,note);setProjectDecision(decision);setSimulation(decision.save.simulation);setPlayerAction(null);setSpeed(1);setSavedAt(decision.decidedAt);setToast(choice==='accepted'?'Client A menerima video Dani!':'Catatan revisi tersimpan. Bawa arahan ke chat.');}
+          catch(error){setToast(error instanceof Error?error.message:'Keputusan belum tersimpan. Coba lagi.');}
+        }}/>}
         {showStudio && <Suspense fallback={<div className="studio-loading" role="status">Menyiapkan studio visual…</div>}><VisualStudio quality={quality} reducedMotion={reducedMotion} onClose={() => setShowStudio(false)} /></Suspense>}
       </section>
     </main>
@@ -406,7 +430,9 @@ function StaffActor({ person, npc, index, visible, simulation, speed, reducedMot
   const actor = useRef<THREE.Group>(null);
   const origin = useRef<[number, number, number]>([npc.position[0], elevation(npc.position) + FLOOR_SURFACE_HEIGHT, npc.position[1]]);
   const encounter = encounterFor(simulation, index);
-  const dialogue = encounter?.phase === 'talking' ? dialogueFor(encounter) : routineDialogue(simulation, index) ?? (index !== 6 && npc.activity === 'meeting' ? meetingDialogue(simulation) : null);
+  const assignment=projectAssignment(simulation.project,simulation.gameDay,simulation.gameMinute,index);
+  const storyDialogue=assignment&&npc.presence==='inside'&&!npc.path.length?projectDialogue(simulation.project,simulation.gameDay,simulation.gameMinute):null;
+  const dialogue = storyDialogue??(encounter?.phase === 'talking' ? dialogueFor(encounter) : routineDialogue(simulation, index) ?? (index !== 6 && npc.activity === 'meeting' ? meetingDialogue(simulation) : null));
   const seat = seatedAt(simulation,index);
   const partnerIndex = encounter?.participants.find((i) => i !== index);
   const greeting = npc.greetUntil > (simulation.gameDay - 1) * 1440 + simulation.gameMinute;
@@ -435,7 +461,7 @@ function StaffActor({ person, npc, index, visible, simulation, speed, reducedMot
     actor.current.rotation.y += angle * (1 - Math.exp(-10 * delta));
   });
   return <group ref={actor} position={origin.current} rotation={initialFacing.current} visible={visible && npc.presence !== 'offsite' && !inPrivateWC} onClick={(event) => { event.stopPropagation(); if (event.delta < 5) onSelect(); }}>
-    <CharacterRig color={person.color} hair={person.hair} pose={pose} equipment={index===9&&npc.duty?.kind==='clean'?'broom':index===8&&simulation.services.coffee?.phase==='carry'?'tray':undefined} seated={!!seat} speed={speed} reducedMotion={reducedMotion} variant={index} />
+    <CharacterRig color={person.color} hair={person.hair} pose={pose} expression={assignment?.mood??'neutral'} equipment={index===9&&npc.duty?.kind==='clean'?'broom':index===8&&simulation.services.coffee?.phase==='carry'?'tray':undefined} seated={!!seat} speed={speed} reducedMotion={reducedMotion} variant={index} />
     {(!avatarActive || pointDistance(npc.position, avatarPosition.current) < 5) && <group position={[0, seat ? 1.58 : 1.84, 0]} scale={avatarActive ? .55 : 1}><SceneLabel text={person.name} kind="npc" /></group>}
     {dialogue?.speaker === index && (!avatarActive || pointDistance(npc.position, avatarPosition.current) < 3.2) && <SpeechBubble name={person.name} text={dialogue.text} color={person.color} compact={avatarActive} />}
   </group>;
@@ -444,7 +470,7 @@ function StaffActor({ person, npc, index, visible, simulation, speed, reducedMot
 function ClientActor({ client, index, visible, simulation, speed, reducedMotion }: { client: Simulation['clients'][number]; index: number; visible: boolean; simulation: Simulation; speed: number; reducedMotion: boolean }) {
   const actor = useRef<THREE.Group>(null), origin = useRef<[number, number, number]>([client.position[0], elevation(client.position) + FLOOR_SURFACE_HEIGHT, client.position[1]]);
   const signing = simulation.reception.client && simulation.reception.person === index && simulation.reception.phase === 'service';
-  const profile=characterProfile(client.variant),clientName=profile.name===defaultCharacterProfiles[client.variant]?.name?client.name:profile.name,seated=client.phase==='meeting'&&!client.path.length;
+  const profile=characterProfile(client.variant),clientName=client.projectId||profile.name===defaultCharacterProfiles[client.variant]?.name?client.name:profile.name,seated=client.phase==='meeting'&&!client.path.length;
   const pose: Pose = client.path.length ? onStairs(client.position)?'stairs':'walk' : signing ? 'sign' : client.phase === 'served' ? 'wave' : seated?client.ownerJoined?'talk':'think':'idle';
   useFrame((_, delta) => {
     if (!actor.current || speed === 0) return;

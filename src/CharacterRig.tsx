@@ -12,7 +12,7 @@ import { useAnimatedCharacterBatch } from './AnimatedCharacterBatch';
 
 export type Pose = 'idle' | 'walk' | 'work' | 'talk' | 'wave' | 'coffee' | 'think' | 'eat'
   | 'read' | 'repair' | 'cook' | 'sign' | 'inspect' | 'stairs' | 'toilet' | 'carry' | 'deliver' | 'clean' | 'phone' | 'water' | 'brew';
-export type CharacterExpression = 'neutral' | 'happy' | 'focused';
+export type CharacterExpression = 'neutral' | 'happy' | 'focused' | 'tired' | 'stressed' | 'angry';
 type Props = {
   color: string; hair: string; pose: Pose | RefObject<Pose>; speed: number;
   reducedMotion: boolean; variant?: number; seated?: boolean; expression?: CharacterExpression;
@@ -184,13 +184,17 @@ export function CharacterRig({ pose, speed, reducedMotion, variant = 0, seated =
     head.current.rotation.z = ease(head.current.rotation.z, state === 'think' ? 0.07
       : (state === 'idle' ? resting.headZ : 0) + Math.sin(t * 0.9) * 0.012 * subtle);
     if (ponytail.current) ponytail.current.rotation.x = ease(ponytail.current.rotation.x, walk ? -cycle * 0.06 * subtle : 0);
-    const focused = expression === 'focused' || expression === 'neutral' && ['work', 'read', 'repair', 'sign','brew'].includes(state);
+    const tired=expression==='tired',tense=expression==='stressed'||expression==='angry';
+    if(tired)head.current.rotation.x=ease(head.current.rotation.x,.17);
+    if(expression==='stressed')head.current.rotation.z=ease(head.current.rotation.z,.08+Math.sin(t*.9)*.02*subtle);
+    const focused = expression === 'focused' || tense || expression === 'neutral' && ['work', 'read', 'repair', 'sign','brew'].includes(state);
     const happy = expression === 'happy' || expression === 'neutral' && ['talk', 'wave', 'coffee', 'water'].includes(state);
     const blinkPhase = t % 4.7;
     const eyelid = !reducedMotion && speed > 0 && blinkPhase > 4.52
       ? 1 - Math.sin((blinkPhase - 4.52) / 0.18 * Math.PI) * 0.93 : 1;
-    if (eyes.current) eyes.current.scale.y = (focused ? 0.84 : happy ? 0.91 : 1) * eyelid;
+    if (eyes.current) eyes.current.scale.y = (tired ? .58 : focused ? 0.84 : happy ? 0.91 : 1) * eyelid;
     if (brows.current) { brows.current.position.y = ease(brows.current.position.y, focused ? -0.008 : happy ? 0.009 : 0); brows.current.rotation.z = ease(brows.current.rotation.z, state === 'think' ? 0.05 : 0); }
+    if(brows.current)brows.current.children.forEach((brow,i)=>{brow.rotation.z=ease(brow.rotation.z,(i===0?-1:1)*(expression==='angry'?.3:expression==='stressed'?-.22:tired?-.12:-.07));});
     if (mouth.current) { mouth.current.scale.x = ease(mouth.current.scale.x, happy ? 1.13 : focused ? 0.8 : 1); mouth.current.scale.y = ease(mouth.current.scale.y, happy ? 1.05 : focused ? 0.34 : 0.68); }
     if (mug.current) {
       mug.current.visible = state === 'coffee';

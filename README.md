@@ -1,6 +1,6 @@
 # Blue and Space Headquarters
 
-**Phase 01 · Visual Foundation — version 0.7.0**
+**Project 001 · Dani Birthday Trial — version 0.8.0**
 
 A little office. A world of possibility.
 
@@ -11,6 +11,14 @@ Gambar ini merekam fondasi Phase 01 awal. Layout 0.7.0 memiliki ruangan dan kara
 Blue and Space adalah kantor miniatur 3D dengan identitas **Premium Cozy Stylized 3D**: biru yang tenang, permukaan cream, kayu hangat, tanaman, serta karakter manusia bergaya yang ekspresif. React, TypeScript, React Three Fiber, dan Three.js menjalankan dunia dan animasi di browser. Karakter, dialog, dan kegiatan memakai aturan scripted lokal tanpa AI API.
 
 Phase 01 membentuk sistem grafis, karakter, dan animasi yang bisa dipakai ulang melalui simulasi lokal. Pemilik menjelajahi kantor sebagai avatar, memakai furnitur, ikut absensi/rapat, makan, minum, menggunakan WC, dan menerima client. Perilaku karakter serta client berjalan dengan aturan scripted; tidak ada AI API.
+
+## Proyek pertama: ulang tahun Dani
+
+Buka kantor lalu pilih **Mulai Senin · 06:00**. Tim menjalani tiga hari cerita khusus: konsep, produksi, dan penyerahan. Deadline Rabu, hari 3, pukul 16:00. Pada kecepatan 1x perjalanan ini sekitar 58 menit nyata; 3x sekitar 19 menit 20 detik selama tab aktif.
+
+Client A datang melalui Amanda. Saat hasil siap, pilih **Duduk sebagai Founder**; avatar berjalan ke ruang meeting client. Setelah duduk bersama client dan Atlas, video MP4 14 detik dapat ditonton dan diunduh. Periksa hasil, lalu pilih diterima atau tulis catatan revisi.
+
+Menutup atau memuat ulang proyek yang belum diputuskan mengulang ke Senin hari 1 pukul 06:00. Keputusan akhir, nama, dan penampilan tersimpan lokal di browser. Setelah diterima kantor kembali ke rutinitas; setelah meminta revisi, bawa catatannya ke chat untuk menyiapkan versi berikutnya. Keputusan berlaku per browser/perangkat. Lihat [PROJECTS.md](PROJECTS.md) untuk paket cerita dan aset.
 
 ## Menjalankan di komputer
 
