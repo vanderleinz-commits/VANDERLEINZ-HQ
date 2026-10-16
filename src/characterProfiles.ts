@@ -1,6 +1,7 @@
 import { PALETTE } from './artDirection.ts';
 
 export type CharacterProfile = {
+  gender: 'male' | 'female';
   name: string;
   role: string;
   silhouette: string;
@@ -47,13 +48,13 @@ const identities = [
 const defaultHair: HairStyle[] = ['sidepart', 'bob', 'ponytail', 'curls', 'textured', 'quiff', 'bun', 'bun', 'bun', 'curls', 'sidepart', 'textured', 'bob', 'sidepart'];
 const defaultGarment: Garment[] = ['jacket', 'overshirt', 'overshirt', 'jacket', 'overshirt', 'overshirt', 'overshirt', 'jacket', 'apron', 'polo', 'jacket', 'jacket', 'jacket', 'jacket'];
 export const defaultCharacterProfiles: readonly CharacterProfile[] = identities.map((identity, index) => ({
-  ...identity, hairStyle: defaultHair[index], garment: defaultGarment[index],
+  ...identity, gender:[1,2,6,7,8,10,12].includes(index)?'female':'male', hairStyle: defaultHair[index], garment: defaultGarment[index],
   eyeColor: [2, 3, 7, 9].includes(index) ? '#54726B' : '#415C71', eyeShape: 'round', faceShape: 'soft', glasses: [3, 5].includes(index),
 }));
-export type CharacterAppearance = Pick<CharacterProfile, 'name' | 'color' | 'hair' | 'skin' | 'trousers' | 'accent' | 'hairStyle' | 'garment' | 'eyeColor' | 'eyeShape' | 'faceShape' | 'glasses'>;
+export type CharacterAppearance = Pick<CharacterProfile, 'gender' | 'name' | 'color' | 'hair' | 'skin' | 'trousers' | 'accent' | 'hairStyle' | 'garment' | 'eyeColor' | 'eyeShape' | 'faceShape' | 'glasses'>;
 const hairStyles: readonly string[] = ['sidepart', 'bob', 'ponytail', 'curls', 'quiff', 'bun', 'textured'];
 const garments: readonly string[] = ['jacket', 'overshirt', 'polo', 'apron'];
-const appearanceKeys = ['name', 'color', 'hair', 'skin', 'trousers', 'accent', 'hairStyle', 'garment', 'eyeColor', 'eyeShape', 'faceShape', 'glasses'] as const;
+const appearanceKeys = ['gender', 'name', 'color', 'hair', 'skin', 'trousers', 'accent', 'hairStyle', 'garment', 'eyeColor', 'eyeShape', 'faceShape', 'glasses'] as const;
 type ProfileStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 /** Allow only bounded identity and appearance fields; jobs and room assignments are fixed. */
@@ -66,6 +67,7 @@ export function validateCharacterAppearance(value: unknown): Partial<CharacterAp
       const name = field.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 24);
       if (name) result.name = name;
     } else if (['color', 'hair', 'skin', 'trousers', 'accent', 'eyeColor'].includes(key) && typeof field === 'string' && /^#[\da-fA-F]{6}$/.test(field)) result[key] = field.toUpperCase();
+    else if (key === 'gender' && (field==='male'||field==='female')) result[key]=field;
     else if (key === 'hairStyle' && typeof field === 'string' && hairStyles.includes(field)) result[key] = field;
     else if (key === 'garment' && typeof field === 'string' && garments.includes(field)) result[key] = field;
     else if (key === 'eyeShape' && typeof field === 'string' && ['round', 'almond'].includes(field)) result[key] = field;

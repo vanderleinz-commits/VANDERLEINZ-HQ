@@ -18,16 +18,16 @@ Kantor miniatur yang hangat, kreatif, cerdas, dan terbuka memakai arsitektur lem
 
 | Warna | Hex | Peran |
 | --- | --- | --- |
-| Midnight Blue | `#142D56` | Identitas, teks, detail blazer |
-| Soft Corporate Blue | `#497FB5` | Kontrol aktif, pakaian, trim |
-| Sky Blue | `#A9D5F2` | Sorotan dan motif langit |
-| Cloud White | `#E8F3FA` | Latar/permukaan terang |
-| Warm Sand | `#F2D9B5` | Pantry dan aksen hangat |
-| Soft Lavender | `#B7A3D5` | Kreativitas/HRD/pakaian |
-| Muted Teal | `#62AAA5` | Teknik dan status aktif |
-| Warm Cream | `#FAF5EC` | Dinding, kain ringan, keramik |
-| Warm Wood | `#C99D70` | Furnitur utama |
-| Light / Dark Wood | `#E0BC92` / `#8C674A` | Variasi kayu dan sambungan |
+| Midnight Blue | `#203C52` | Identitas, teks, detail blazer |
+| Soft Corporate Blue | `#315770` | Kontrol aktif, pakaian, trim |
+| Sky Blue | `#B5CED7` | Sorotan dan motif langit |
+| Cloud White | `#E9EFEE` | Latar/permukaan terang |
+| Warm Sand | `#D8C29B` | Pantry dan aksen hangat |
+| Soft Lavender | `#A9A1B7` | Kreativitas/HRD/pakaian |
+| Muted Teal | `#779B97` | Teknik dan status aktif |
+| Warm Cream | `#F3EDE1` | Dinding, kain ringan, keramik |
+| Warm Wood | `#A17D57` | Furnitur utama |
+| Light / Dark Wood | `#C0A37B` / `#705338` | Variasi kayu dan sambungan |
 
 `src/artDirection.ts` merupakan sumber bersama. Midnight dipakai untuk teks penting; biru gelap untuk teks sekunder. Cloud/sand/lavender/teal dipakai sebagai permukaan atau aksen. Kulit/rambut memakai variasi alami hangat pada `src/characterProfiles.ts`.
 
@@ -61,6 +61,12 @@ Studio menyediakan nama, tujuh model rambut, empat bentuk pakaian, tiga bentuk w
 Nama dibatasi 24 karakter dan ditampilkan sebagai teks React. Penyimpanan terpisah memakai kunci `blue-and-space-character-appearance-v1`, dengan versi serta daftar field yang divalidasi. Data rusak memakai penampilan resmi; field jabatan, ruangan, dan proporsi tidak diterima. Jika penyimpanan perangkat tidak tersedia, tampilan masih berubah untuk sesi berjalan dan Studio memberi pesan yang sesuai. Akun/cloud sync untuk penampilan belum tersedia.
 
 Pakaian dibedakan melalui lapel/bentuk kancing, kerah polo, lengan, dan apron. Warna bebas tetap memakai bahan hangat matte yang sama. Bentuk kepala hanya berubah sedikit; penyunting tidak merusak proporsi miniature human. Material yang dapat diedit dibuat satu kali per identitas dan diwarnai ulang, sehingga drag pemilih warna tidak menumpuk material GPU baru.
+
+## Warm Workspace - 0.9.0
+
+Kayu bertekstur halus, lantai papan berselang, cream stone pada WC/hall, bingkai jendela biru gelap, skyline lembut, tanaman berdaun, dan karya seni lengkung membentuk satu keluarga material. Tekstur dibuat deterministik pada canvas lokal, dibagi melalui cache GPU, dan tidak mengakses layanan AI atau gambar eksternal. Dinding, tangga, dan furnitur statis digabung berdasarkan material; lantai pilihan, pintu, layar, serta karakter tetap dinamis. Lampu gantung mengikuti jadwal daya kantor.
+
+Creator Founder memakai rig dan proporsi yang sama: Pria/Wanita memilih template awal yang dapat diedit. Delapan preset lokal hanya menyimpan penampilan dan nama; jabatan, ruangan, serta cerita Founder tetap. WC mempunyai signage dan pemilihan rute sesuai gender profil.
 
 ## Arsitektur dan interior
 

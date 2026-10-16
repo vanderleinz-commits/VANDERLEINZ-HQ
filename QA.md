@@ -1,3 +1,13 @@
+## Rilis 0.9.0 - 16 Oktober 2026 (Asia/Jakarta)
+
+- 82 tes lulus, 0 gagal. Tiga tes baru mencakup validasi/persistensi preset Founder, gender dan pemilihan WC, serta kunjungan WC staf tanpa salah ruangan atau benturan reservasi.
+- TypeScript dan build Vite berhasil, 624 modul. Bundle utama 1.344 MB / 384.28 kB gzip; Studio terpisah 15.40 kB / 5.52 kB gzip. Peringatan ukuran chunk Vite masih ada.
+- Browser lokal: membuat Aruna (Wanita) dan Bima (Pria), memilih kembali preset, nama pada editor ikut berubah, dan tombol Mainkan avatar menutup Studio serta masuk Avatar Mode.
+- Avatar Aruna berjalan melalui rute kantor ke WC Wanita; DOM diagnostik menunjukkan toilet:active di titik [5.395,-4.09,0], label ruangan WC Wanita. Tidak mengubah profil atau penyimpanan di situs produksi selama QA.
+- Kedua lantai diperiksa visual: kayu bertekstur, cream/blue wainscot, bingkai jendela, artwork, tanaman, pendants, workstation, ruang Founder, dan meeting. Titik furnitur/navigation bersama dipertahankan.
+- Geometri dinding/jendela/tangga statis ikut batching. Snapshot kantor setelah batching: 420 draw calls / 167,578 segitiga pada satu kamera. Bukan benchmark komparatif; FPS lingkungan pemeriksaan berfluktuasi dan tidak mewakili perangkat pengguna.
+- Belum diaudit ulang seluruh pose, kombinasi pakaian, browser/perangkat, atau seluruh kondisi pencahayaan. Riwayat audit di bawah merekam rilis sebelumnya.
+
 # Blue and Space Headquarters — Phase 01 QA
 
 ## Versi 0.8.0 · Proyek Dani · 13 Oktober 2026

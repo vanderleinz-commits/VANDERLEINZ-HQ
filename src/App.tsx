@@ -17,7 +17,7 @@ import type { Pose } from './CharacterRig';
 import { RoomLife, OfficeLighting, daylight } from './RoomLife';
 import { SpeechBubble } from './SpeechBubble';
 import { OfficeFurnishings, OfficeEntrance, OfficeLandscape } from './OfficeArchitecture';
-import { arrivalMinute, workSeat, desks, RECEPTION_POST, ATTENDANCE_POINT, ownerDeskPoint, ownerDeskSeat, founderMeetingSeat, clientMeetingSeat, meetingSeat, lunchSeat, pantryDrinkPoint, CATERING_COUNTER_POINT, toiletPoint, hrdSeat, OWNER_LUNCH_SLOT } from './officeLayout';
+import { arrivalMinute, workSeat, desks, RECEPTION_POST, ATTENDANCE_POINT, ownerDeskPoint, ownerDeskSeat, founderMeetingSeat, clientMeetingSeat, meetingSeat, lunchSeat, pantryDrinkPoint, CATERING_COUNTER_POINT, toiletPoint, restroomForStaff, hrdSeat, OWNER_LUNCH_SLOT } from './officeLayout';
 import { BuildingShell } from './BuildingShell';
 import type { FloorView } from './BuildingShell';
 import { BRAND, GRAPHICS, PALETTE } from './artDirection';
@@ -216,7 +216,7 @@ function App() {
       if (atlasWaiting) { beginPlayerAction('atlas', founderMeetingSeat(0).position, 'talk', 12, undefined, founderMeetingSeat(0).rotation); return; }
       if (nearby === 7 && hrAvailable) { beginPlayerAction('consult', hrdSeat(0).position, 'talk', 10, undefined, hrdSeat(0).rotation); return; }
       if (avatarRoom === 5) { beginPlayerAction('meal', lunchSeat(OWNER_LUNCH_SLOT).position, 'eat', 18, undefined, lunchSeat(OWNER_LUNCH_SLOT).rotation); return; }
-      if (avatarRoom === 9 || avatarRoom === 10) { beginPlayerAction('toilet', toiletPoint(avatarRoom), 'toilet', 5); return; }
+      if (avatarRoom === 9 || avatarRoom === 10) { beginPlayerAction('toilet', toiletPoint(restroomForStaff(OWNER_PROFILE_INDEX)), 'toilet', 5); return; }
       greetNearby();
     };
     window.addEventListener('keydown', interact);
@@ -228,8 +228,8 @@ function App() {
     <main className={`game-shell ${simulation.project?'has-project':''} ${mode === 'avatar' ? 'avatar-mode' : ''} ${hideInterface ? 'ui-hidden' : ''}`}>
       <section className="world-view" aria-label={`${BRAND.name} · 3D office world`}>
         <Canvas shadows="soft" frameloop={showStudio ? 'never' : 'always'} dpr={[1, GRAPHICS[quality].dpr]} camera={{ position: [25, 27, 34], fov: 34 }} gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1 }}>
-          <color attach="background" args={[daylight(gameMinute) > 0.2 ? '#DFEAF4' : '#91A9C4']} />
-          <fog attach="fog" args={[daylight(gameMinute) > 0.2 ? '#DFEAF4' : '#91A9C4', 65, 120]} />
+          <color attach="background" args={[daylight(gameMinute) > 0.2 ? '#E9E5DA' : '#9FAAAE']} />
+          <fog attach="fog" args={[daylight(gameMinute) > 0.2 ? '#E9E5DA' : '#9FAAAE', 65, 120]} />
           <OfficeLighting minute={gameMinute} simulation={simulation} quality={quality} />
           <OfficeWorld selectedRoom={selectedRoom} floorView={floorView} mode={showStudio ? 'director' : mode} simulation={simulation} speed={speed} reducedMotion={reducedMotion} avatarGesture={avatarGesture} avatarPosition={avatarPosition} touchKeys={touchKeys} playerAction={playerAction} onPlayerArrival={completePlayerArrival} onPlayerCancel={() => setPlayerAction(null)} onAvatarRoomChange={(id) => { setAvatarRoom(id); setSimulation((current)=>setOwnerRoom(current,id)); if (id !== null) setSelectedRoom(id); }} onAvatarFloorChange={(floor) => setFloorView((current) => current === 'all' ? current : floor)} onSelectRoom={focusRoom} onSelectNpc={inspectNpc} />
           <CameraRig room={room} floorView={floorView} mode={mode} />
@@ -239,7 +239,7 @@ function App() {
         <header className="topbar">
           <div className="brand-lockup">
             <div className="brand-mark" aria-hidden="true">B<span>✦</span></div>
-            <div><div className="brand-name">BLUE <span>AND</span> SPACE</div><div className="brand-caption">HEADQUARTERS · YOUR LITTLE WORLD</div></div>
+            <div><div className="brand-name">Blue <span>and</span> Space</div><div className="brand-caption">HEADQUARTERS · YOUR LITTLE WORLD</div></div>
           </div>
           <div className="topbar-center"><span className={`live-dot ${officeOpen(gameMinute) ? '' : 'closed'}`} /> {speed === 0 ? 'PAUSED' : officeOpen(gameMinute) ? 'KANTOR BUKA' : 'KANTOR TUTUP'} <i>·</i> {peopleInside} / {staff.length} DI HQ</div>
           <div className="topbar-actions">
@@ -337,7 +337,7 @@ function App() {
               {atlasWaiting && <button disabled={speed===0} onClick={()=>beginPlayerAction('atlas',founderMeetingSeat(0).position,'talk',12,undefined,founderMeetingSeat(0).rotation)}>E · Diskusi dengan {staff[0].name}</button>}
             </>}
             {avatarRoom===5 && <><button disabled={speed===0} onClick={()=>beginPlayerAction('meal',lunchSeat(OWNER_LUNCH_SLOT).position,'eat',18,undefined,lunchSeat(OWNER_LUNCH_SLOT).rotation)}>E · Makan di pantry</button><button disabled={speed===0} onClick={()=>beginPlayerAction('drink',pantryDrinkPoint,'water',4)}>E · Ambil air minum</button></>}
-            {(avatarRoom===9||avatarRoom===10) && <button disabled={speed===0} onClick={()=>beginPlayerAction('toilet',toiletPoint(avatarRoom),'toilet',5)}>E · Gunakan WC</button>}
+            <button disabled={speed===0} onClick={()=>beginPlayerAction('toilet',toiletPoint(restroomForStaff(OWNER_PROFILE_INDEX)),'toilet',5)}>{avatarRoom===restroomForStaff(OWNER_PROFILE_INDEX)?'E · Gunakan ':'Ke '}{rooms[restroomForStaff(OWNER_PROFILE_INDEX)].name} →</button>
             {clientNearby && <button disabled={speed===0} onClick={()=>beginPlayerAction('client',clientMeetingSeat(0).position,'talk',8,clientNearby.id,clientMeetingSeat(0).rotation)}>E · Bertemu {clientNearby.name}</button>}
             {nearby===7 && hrAvailable && <button disabled={speed===0} onClick={()=>beginPlayerAction('consult',hrdSeat(0).position,'talk',10,undefined,hrdSeat(0).rotation)}>E · Konsultasi dengan Felin</button>}
           </>}
@@ -366,7 +366,7 @@ function App() {
           try{const decision=decideProject(latestSave.current,choice,note);setProjectDecision(decision);setSimulation(decision.save.simulation);setPlayerAction(null);setSpeed(1);setSavedAt(decision.decidedAt);setToast(choice==='accepted'?'Client A menerima video Dani!':'Catatan revisi tersimpan. Bawa arahan ke chat.');}
           catch(error){setToast(error instanceof Error?error.message:'Keputusan belum tersimpan. Coba lagi.');}
         }}/>}
-        {showStudio && <Suspense fallback={<div className="studio-loading" role="status">Menyiapkan studio visual…</div>}><VisualStudio quality={quality} reducedMotion={reducedMotion} onClose={() => setShowStudio(false)} /></Suspense>}
+        {showStudio && <Suspense fallback={<div className="studio-loading" role="status">Menyiapkan studio visual…</div>}><VisualStudio quality={quality} reducedMotion={reducedMotion} onClose={() => setShowStudio(false)} onPlayAvatar={()=>{setShowStudio(false);changeMode('avatar');}} /></Suspense>}
       </section>
     </main>
   );

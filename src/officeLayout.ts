@@ -1,5 +1,6 @@
 import { rooms, staff, STAFF_WORKERS, FLOOR_HEIGHT } from './worldData.ts';
 import type { Point } from './navigation.ts';
+import { characterProfile } from './characterProfiles.ts';
 export { FLOOR_HEIGHT, FLOOR_SURFACE_HEIGHT, STAFF_WORKERS, WORLD_BOUNDS } from './worldData.ts';
 
 export type Seat = { position: Point; rotation: number };
@@ -71,6 +72,7 @@ export const clientMeetingSeat = (index: number): Seat => {
   return { position: roomLocal(11, x, z), rotation: slot % 2 ? -Math.PI / 2 : Math.PI / 2 };
 };
 export const toiletPoint = (roomId: number): Point => roomLocal(roomId === 10 ? 10 : 9, 0, .2);
+export const restroomForStaff = (index: number): 9 | 10 => characterProfile(index).gender==='female'?9:10;
 export const pantryDrinkPoint: Point = roomLocal(5, -2.2, -1.95);
 export const pantryCookPoint: Point = roomLocal(5, 1.8, -1.95);
 export const CATERING_COUNTER_POINT: Point = roomLocal(5, 1.3, -2.75);

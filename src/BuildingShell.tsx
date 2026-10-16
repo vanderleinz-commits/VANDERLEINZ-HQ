@@ -4,6 +4,8 @@ import { rooms, FLOOR_HEIGHT } from './worldData';
 import type { Room } from './worldData';
 import { PALETTE } from './artDirection';
 import { RoundedBlock } from './VisualPrimitives';
+import { floorMap, skyWindowMap } from './visualTextures';
+import { StaticFurnitureBatch } from './StaticFurnitureBatch';
 import { STAIR_X, STAIR_WIDTH, STAIR_BOTTOM, STAIR_TOP, INTERIOR_DOOR_WIDTH, MAIN_DOOR_WIDTH } from './officeLayout';
 
 export type FloorView = 0 | 1 | 'all';
@@ -33,39 +35,47 @@ function RoomLabel({ room, selected }: { room: Room; selected: boolean }) {
   useEffect(() => () => texture.dispose(), [texture]);
   return <sprite scale={[Math.max(1.85, Math.min(3.7, text.length * 0.125 + 0.4)), 0.42, 1]} renderOrder={10}><spriteMaterial map={texture} transparent depthTest={false} depthWrite={false} toneMapped={false} /></sprite>;
 }
+function WindowBay({width,height=1.24}:{width:number;height?:number}){
+  const divisions=Math.max(2,Math.ceil(width/1.4));
+  return <group>
+    <mesh receiveShadow><planeGeometry args={[width,height]}/><meshStandardMaterial map={skyWindowMap()} color="#e5ece7" roughness={.78}/></mesh>
+    <mesh position={[0,0,.012]}><planeGeometry args={[width,height]}/><meshStandardMaterial color={PALETTE.sky} transparent opacity={.07} roughness={.15} depthWrite={false}/></mesh>
+    {[-1,1].map(side=><group key={side}><Block position={[0,side*height/2,.025]} size={[width+.09,.055,.08]} color={PALETTE.corporate}/></group>)}
+    {Array.from({length:divisions+1},(_,i)=><Block key={i} position={[-width/2+i*width/divisions,0,.03]} size={[.045,height,.075]} color={PALETTE.corporate}/>)}
+    <Block position={[0,-height/2-.055,.055]} size={[width+.14,.065,.25]} color={PALETTE.woodLight}/>
+  </group>;
+}
 function RoomWalls({ room, selected, onSelect, showLabel }: { room: Room; selected: boolean; onSelect: () => void; showLabel: boolean }) {
   const [x, z] = room.center, width = room.width, depth = room.depth, y = room.floor * FLOOR_HEIGHT;
-  const side = z < 0 ? 1 : -1, height = 1.72, doorWidth = INTERIOR_DOOR_WIDTH, segment = (width - doorWidth) / 2;
-  const wallColor = selected ? '#F1F5F6' : room.id === 3 || room.id === 7 ? '#E0EAF2' : PALETTE.cream;
-  const trimColor = room.id === 3 || room.id === 7 ? PALETTE.corporate : '#87AAC7';
+  const side = z < 0 ? 1 : -1, height = 1.72, backHeight=2.18, doorWidth = INTERIOR_DOOR_WIDTH, segment = (width - doorWidth) / 2;
+  const wallColor = room.id === 3 || room.id === 7 ? '#D5DFDC' : PALETTE.cream;
+  const trimColor = [9,10].includes(room.id)?'#8CA8AD':room.id===6?'#527377':PALETTE.corporate;
   return <group position={[x, y, z]}>
-    <mesh onClick={(event) => { event.stopPropagation(); if (event.delta < 5) onSelect(); }} position={[0, 0.055, 0]} receiveShadow><boxGeometry args={[width, 0.12, depth]} /><meshStandardMaterial color={[9, 10].includes(room.id) ? room.tint : '#EAE5DB'} roughness={0.97} emissive={selected ? PALETTE.sky : '#000000'} emissiveIntensity={selected ? 0.12 : 0} /></mesh>
-    {room.id === 0 ? [-1, 1].map((s) => <Block key={s} position={[s * (width + MAIN_DOOR_WIDTH) / 4, height / 2, -side * depth / 2]} size={[(width - MAIN_DOOR_WIDTH) / 2, height, 0.14]} color={wallColor} />) : <Block position={[0, height / 2, -side * depth / 2]} size={[width, height, 0.14]} color={wallColor} />}
+    <mesh onClick={(event) => { event.stopPropagation(); if (event.delta < 5) onSelect(); }} position={[0, 0.055, 0]} receiveShadow><boxGeometry args={[width, 0.12, depth]} /><meshStandardMaterial map={floorMap(width,depth,[9,10,6].includes(room.id))} color="#ffffff" roughness={0.9} emissive={selected ? PALETTE.sand : '#000000'} emissiveIntensity={selected ? 0.018 : 0} /></mesh>
+    <StaticFurnitureBatch>
+    {room.id === 0 ? [-1, 1].map((s) => <group key={s}><Block position={[s * (width + MAIN_DOOR_WIDTH) / 4, backHeight / 2, -side * depth / 2]} size={[(width - MAIN_DOOR_WIDTH) / 2, backHeight, 0.14]} color={wallColor}/><group position={[s*(width+MAIN_DOOR_WIDTH)/4,1.37,-side*(depth/2-.09)]} rotation={[0,Math.PI,0]}><WindowBay width={(width-MAIN_DOOR_WIDTH)/2-.45} height={1.15}/></group></group>) : <Block position={[0, backHeight / 2, -side * depth / 2]} size={[width, backHeight, 0.14]} color={wallColor} />}
     {[-1, 1].map((s) => <group key={s}>
       <Block position={[s * width / 2, height / 2, 0]} size={[0.14, height, depth]} color={wallColor} />
       <Block position={[s * (width + doorWidth) / 4, height / 2, side * depth / 2]} size={[segment, height, 0.14]} color={wallColor} />
       <Block position={[s * width / 2, 0.4, 0]} size={[0.17, 0.48, depth]} color={trimColor} />
-      <Block position={[s * width / 2, height + 0.01, 0]} size={[0.2, 0.07, depth]} color={PALETTE.cloud} />
+      <Block position={[s * width / 2, height + 0.01, 0]} size={[0.2, 0.07, depth]} color={PALETTE.woodLight} />
       <Block position={[s * (width + doorWidth) / 4, 0.4, side * depth / 2]} size={[segment, 0.48, 0.17]} color={trimColor} />
       <Block position={[s * width / 2, .66, 0]} size={[.19, .045, depth]} color={PALETTE.woodLight} />
     </group>)}
     <Block position={[0, 0.08, side * depth / 2]} size={[doorWidth, 0.04, 0.19]} color={PALETTE.woodLight} />
     {room.id !== 0 && <>
-      <Block position={[0, height + 0.01, -side * depth / 2]} size={[width, 0.07, 0.2]} color={PALETTE.cloud} />
+      <Block position={[0, backHeight + 0.01, -side * depth / 2]} size={[width, 0.07, 0.2]} color={PALETTE.woodLight} />
       <Block position={[0, 0.4, -side * depth / 2]} size={[width, 0.48, 0.17]} color={trimColor} />
       <Block position={[0, .66, -side * depth / 2]} size={[width, .045, .19]} color={PALETTE.woodLight} />
-      {![9, 10].includes(room.id) && <group position={[0, 1.09, -side * (depth / 2 - 0.084)]}>
-        <mesh><boxGeometry args={[Math.min(2.05, width - 0.65), 0.68, 0.032]} /><meshStandardMaterial color={PALETTE.sky} roughness={0.58} /></mesh>
-        <Block position={[0, 0, side * 0.02]} size={[0.035, 0.71, 0.047]} color="#edf4f7" />
-        {[-0.35, 0.35].map((dy) => <Block key={dy} position={[0, dy, side * 0.02]} size={[Math.min(2.12, width - 0.58), 0.04, 0.055]} color="#c9dce9" />)}
-      </group>}
+      {![9,10].includes(room.id)&&<group position={[0,1.38,-side*(depth/2-.085)]} rotation={[0,side===1?0:Math.PI,0]}><WindowBay width={width-.8}/></group>}
     </>}
+    </StaticFurnitureBatch>
     {showLabel&&<group position={[0, 2.11, side * (depth / 2 - 0.21)]}><RoomLabel room={room} selected={selected} /></group>}
   </group>;
 }
 function Stairs() {
   const count = 30, length = STAIR_BOTTOM[1] - STAIR_TOP[1], rise = FLOOR_HEIGHT / count;
-  return <group>
+  return <group><StaticFurnitureBatch>
     {Array.from({ length: count }, (_, i) => {
       const height = (i + 1) * rise, z = STAIR_BOTTOM[1] - (i + 0.5) * length / count;
       return <group key={i}><Block position={[STAIR_X, height / 2, z]} size={[STAIR_WIDTH, height, length / count + 0.006]} color="#BDD1E0" /><Block position={[STAIR_X, height + 0.01, z]} size={[STAIR_WIDTH + .05, 0.03, length / count + 0.02]} color={PALETTE.woodLight} /></group>;
@@ -75,7 +85,7 @@ function Stairs() {
       {[0, 5, 10, 15, 20, 25, 29].map((i) => { const height = (i + 1) * rise, z = STAIR_BOTTOM[1] - (i + 0.5) * length / count; return <Rail key={i} from={[STAIR_X + side * (STAIR_WIDTH / 2 + .06), height, z]} to={[STAIR_X + side * (STAIR_WIDTH / 2 + .06), height + 0.9, z]} radius={0.024} />; })}
     </group>)}
     <Block position={[STAIR_X, 0.08, STAIR_BOTTOM[1] + .22]} size={[STAIR_WIDTH + .4, 0.15, .46]} color="#a0bace" />
-  </group>;
+  </StaticFurnitureBatch></group>;
 }
 function BalconyRails() {
   return <group>
@@ -90,9 +100,9 @@ function BalconyRails() {
 export function BuildingShell({ floorView, selectedRoom, onSelectRoom, showLabels=true }: { floorView: FloorView; selectedRoom: number; onSelectRoom: (id: number) => void; showLabels?: boolean }) {
   const upper = floorView !== 0;
   return <group userData={{ cameraObstacle: true, cameraStructure: true }}>
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.49, 0]} receiveShadow><planeGeometry args={[200, 200]} /><meshStandardMaterial color="#C6DAE6" roughness={1} /></mesh>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.49, 0]} receiveShadow><planeGeometry args={[200, 200]} /><meshStandardMaterial color="#D9D7CB" roughness={1} /></mesh>
     <Block position={[.8, -0.25, 0]} size={[33.5, .48, 15.9]} color={PALETTE.midnight} />
-    <Block position={[.8, .025, 0]} size={[33.1, .085, 15.6]} color={PALETTE.cloud} />
+    <mesh position={[.8,.025,0]} receiveShadow><boxGeometry args={[33.1,.085,15.6]}/><meshStandardMaterial map={floorMap(33.1,15.6,true)} roughness={.87}/></mesh>
     <Block position={[.8, -.04, 7.74]} size={[33.25, .15, .12]} color={PALETTE.woodLight} />
     {upper && <>
       <Block position={[-1.82, FLOOR_HEIGHT - 0.16, -3.25]} size={[28.34, 0.28, 8.84]} color="#9eb7cb" />

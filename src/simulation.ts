@@ -1,7 +1,7 @@
 import { staff, rooms, STAFF_WORKERS, MEETING_PARTICIPANTS } from './worldData.ts';
 import { findPath, isWalkable, nearestWalkable, roomAt, pointDistance, onStairs } from './navigation.ts';
 import type { Point } from './navigation.ts';
-import { ENTRY_POINT, RECEPTION_POST, ATTENDANCE_POINT, workSeat, meetingSeat, lunchSeat, meetingSlot, lunchSlot, librarySeat, hrdSeat, founderMeetingSeat, clientMeetingSeat, clientServicePoint, toiletPoint, pantryDrinkPoint, pantryCookPoint, inspectionPoint, attendancePoint, arrivalMinute, roomLocal, receptionBreakSeat, servicePoint, cleaningPoint } from './officeLayout.ts';
+import { ENTRY_POINT, RECEPTION_POST, ATTENDANCE_POINT, workSeat, meetingSeat, lunchSeat, meetingSlot, lunchSlot, librarySeat, hrdSeat, founderMeetingSeat, clientMeetingSeat, clientServicePoint, toiletPoint, restroomForStaff, pantryDrinkPoint, pantryCookPoint, inspectionPoint, attendancePoint, arrivalMinute, roomLocal, receptionBreakSeat, servicePoint, cleaningPoint } from './officeLayout.ts';
 import type { Seat } from './officeLayout.ts';
 import { initialBonds, encounterFor, interactionGoal, advanceSocial, cancelInteraction, interactionLabels, interactionDuration } from './social.ts';
 import type { Encounter } from './social.ts';
@@ -206,7 +206,7 @@ function scheduleDuties(s:Simulation) {
   if(i===7&&s.ownerActive&&s.ownerRoom===4&&s.ownerActivity==='consult')continue;
   const n=s.npcs[i];if(now<n.nextLeisureAt||!availableForDuty(s,i)||n.path.length||pointDistance(n.position,activityGoal(s,i))>.1||s.npcs[0].duty?.kind==='inspect'&&s.npcs[0].duty.target===i)continue;
   const roll=random(s),kind:DutyKind=i===7?(roll<.48?'hr':roll<.72?'drink':roll<.9?'toilet':'read'):roll<.14?'hr':roll<.4?'toilet':roll<.66?'read':'drink';let target=0;
-  if(kind==='toilet'){const free=[9,10].filter(room=>!s.npcs.some(n=>n.duty?.kind==='toilet'&&n.duty.target===room));if(!free.length){n.nextLeisureAt=now+10;continue;}target=free[Math.floor(random(s)*free.length)];}
+  if(kind==='toilet'){const free=[restroomForStaff(i)].filter(room=>!s.npcs.some(n=>n.duty?.kind==='toilet'&&n.duty.target===room));if(!free.length){n.nextLeisureAt=now+10;continue;}target=free[Math.floor(random(s)*free.length)];}
   if(kind==='read'){const free=[0,1].filter(slot=>!s.npcs.some(n=>n.duty?.kind==='read'&&n.duty.target===slot));if(!free.length){n.nextLeisureAt=now+10;continue;}target=free[0];}
   if(kind==='hr'){
    if(s.ownerActive&&s.ownerRoom===4&&s.ownerActivity==='consult'){n.nextLeisureAt=now+18;continue;}
@@ -219,7 +219,7 @@ function scheduleDuties(s:Simulation) {
  }
  const amanda=s.npcs[6];if(now>=amanda.nextLeisureAt&&availableForDuty(s,6)&&!amanda.path.length&&s.reception.person===null&&!s.npcs.some(person=>['checking-in','checking-out'].includes(person.presence))&&!s.clients.some(client=>['arriving','waiting'].includes(client.phase))){
   const roll=random(s);let kind:DutyKind=roll<.5?'toilet':'drink',target=0;
-  if(kind==='toilet'){const free=[9,10].filter(room=>!s.npcs.some(person=>person.duty?.kind==='toilet'&&person.duty.target===room));if(!free.length){amanda.nextLeisureAt=now+12;return;}target=free[Math.floor(random(s)*free.length)];}
+  if(kind==='toilet'){const free=[restroomForStaff(6)].filter(room=>!s.npcs.some(person=>person.duty?.kind==='toilet'&&person.duty.target===room));if(!free.length){amanda.nextLeisureAt=now+12;return;}target=free[Math.floor(random(s)*free.length)];}
   if(kind==='drink'&&s.npcs.some(person=>person.duty?.kind==='drink')){amanda.nextLeisureAt=now+12;return;}
   startDuty(s,6,kind,target,kind==='toilet'?6:4);amanda.nextLeisureAt=now+105+random(s)*65;
  }
@@ -477,7 +477,7 @@ export function parseSave(json:string|null):SaveData {
    if(officeOpen(s.gameMinute)&&s.gameMinute<arrivalMinute(i)){presence='offsite';position=outside(i);}
    if(version===5&&(isWorker(i)||i===6)&&presence==='inside'&&!activeMeeting(s)&&officeOpen(s.gameMinute)){
     const d=record(saved.duty),kind=String(d.kind) as DutyKind,target=Math.floor(finite(d.target,-1,['client','coffee','support'].includes(kind)?1e9:12,0));
-    const targetValid=kind==='private'?i===0&&target===1:kind==='client'?i===0:kind==='support'?i<8&&i!==0&&i!==6:kind==='coffee'?i===8:kind==='clean'?i===9&&target>=0&&target<rooms.length:kind==='repair'?i===5&&(target===-1||isWorker(target)&&target<8):kind==='inspect'?i===0&&isWorker(target)&&target!==0&&target<8:kind==='toilet'?[9,10].includes(target):['read','hr'].includes(kind)?[0,1].includes(target):['drink','cook'].includes(kind);
+    const targetValid=kind==='private'?i===0&&target===1:kind==='client'?i===0:kind==='support'?i<8&&i!==0&&i!==6:kind==='coffee'?i===8:kind==='clean'?i===9&&target>=0&&target<rooms.length:kind==='repair'?i===5&&(target===-1||isWorker(target)&&target<8):kind==='inspect'?i===0&&isWorker(target)&&target!==0&&target<8:kind==='toilet'?target===restroomForStaff(i):['read','hr'].includes(kind)?[0,1].includes(target):['drink','cook'].includes(kind);
     if(Object.hasOwn(s.completedDuties,kind)&&targetValid&&(i!==6||['toilet','drink','cook'].includes(kind)))duty={kind,target,phase:d.phase==='active'?'active':'travel',elapsed:finite(d.elapsed,0,30,0),duration:finite(d.duration,1,30,10),deadline:finite(d.deadline,now+.001,now+150,now+150),...(kind==='support'?{seatSlot:Math.floor(finite(d.seatSlot,4,7,4))}:{})};
    }
    const b=record(saved.breakPlan),breakPlan=b.day===s.gameDay&&['desk','pantry','library','reception','ob'].includes(String(b.kind))?{day:s.gameDay,kind:b.kind as BreakPlan['kind'],slot:Math.floor(finite(b.slot,0,b.kind==='pantry'?9:2,0))}:n.breakPlan;

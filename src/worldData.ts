@@ -19,8 +19,8 @@ export const rooms: Room[] = [
   room(6, 'Database Server', 'Infrastructure', '▥', [.2, -3.3], 0, '#DAE9EC', 'NEXUS keeps the office systems ready in a tidy, muted teal room.'),
   room(7, 'Manager Office', 'Operations', '▦', [0, -3.3], 1, '#D6E7F4', 'A composed blue workspace where ATLAS connects everyday plans.'),
   room(8, 'Library', 'Reading & focus', '▧', [-9.8, -3.3], 0, '#E7E7E0', 'Wooden shelves, leafy plants, and a quiet place to read and wonder.'),
-  room(9, 'WC 1', 'Comfort', '◇', [4.15, -3.3], 0, '#EDF2F4', 'A clean, private restroom with cream ceramics and soft blue trim.', 2.7),
-  room(10, 'WC 2', 'Comfort', '◇', [7.05, -3.3], 0, '#EDF2F4', 'A second calm, private restroom with a compact washbasin.', 2.7),
+  room(9, 'WC Wanita', 'Women’s restroom', '♀', [4.15, -3.3], 0, '#E5DDDE', 'WC khusus wanita dengan keramik cream, wastafel, dan penanda pintu yang jelas.', 2.7),
+  room(10, 'WC Pria', 'Men’s restroom', '♂', [7.05, -3.3], 0, '#D4E0E4', 'WC khusus pria dengan keramik cream, wastafel, dan penanda pintu yang jelas.', 2.7),
   room(11, 'Client Meeting Room', 'Guest meetings', '◎', [9.6, -3.3], 1, '#E8E7F2', 'An eight-seat guest room for the founder, manager, clients, and project team.', 4.8),
   room(12, 'Gudang dan Ruang OB', 'Office care & storage', '▣', [10.84, -3.3], 0, '#DCE6E5', 'Organized supplies, cleaning equipment, and a comfortable rest corner for Yati and Deno.'),
 ];

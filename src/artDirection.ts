@@ -3,14 +3,14 @@ export const BRAND = {
   name: 'Blue and Space Headquarters',
   shortName: 'Blue and Space',
   caption: 'A little office. A world of possibility.',
-  phase: 'Phase 01 · Visual Foundation',
+  phase: 'Warm Workspace · Visual Design',
 } as const;
 
 export const PALETTE = {
-  midnight: '#142D56', corporate: '#497FB5', sky: '#A9D5F2', cloud: '#E8F3FA',
-  sand: '#F2D9B5', lavender: '#B7A3D5', teal: '#62AAA5',
-  cream: '#FAF5EC', wood: '#C99D70', woodLight: '#E0BC92', woodDark: '#8C674A',
-  leaf: '#769A81', ink: '#35455D', shadow: '#7589A4',
+  midnight: '#203C52', corporate: '#315770', sky: '#B5CED7', cloud: '#E9EFEE',
+  sand: '#D8C29B', lavender: '#A9A1B7', teal: '#779B97',
+  cream: '#F3EDE1', wood: '#A17D57', woodLight: '#C0A37B', woodDark: '#705338',
+  leaf: '#587757', ink: '#2F4856', shadow: '#89928F',
 } as const;
 
 export const SURFACES = {
@@ -19,6 +19,7 @@ export const SURFACES = {
   fabric: { roughness: 0.96, metalness: 0 },
   skin: { roughness: 0.84, metalness: 0 },
   ceramic: { roughness: 0.6, metalness: 0 },
+  stone: { roughness: 0.79, metalness: 0 },
   trim: { roughness: 0.58, metalness: 0.16 },
 } as const;
 

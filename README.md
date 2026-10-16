@@ -1,6 +1,6 @@
 # Blue and Space Headquarters
 
-**Project 001 · Dani Birthday Trial — version 0.8.0**
+**Warm Workspace · Founder Avatar Studio — version 0.9.0**
 
 A little office. A world of possibility.
 
@@ -11,6 +11,12 @@ Gambar ini merekam fondasi Phase 01 awal. Layout 0.7.0 memiliki ruangan dan kara
 Blue and Space adalah kantor miniatur 3D dengan identitas **Premium Cozy Stylized 3D**: biru yang tenang, permukaan cream, kayu hangat, tanaman, serta karakter manusia bergaya yang ekspresif. React, TypeScript, React Three Fiber, dan Three.js menjalankan dunia dan animasi di browser. Karakter, dialog, dan kegiatan memakai aturan scripted lokal tanpa AI API.
 
 Phase 01 membentuk sistem grafis, karakter, dan animasi yang bisa dipakai ulang melalui simulasi lokal. Pemilik menjelajahi kantor sebagai avatar, memakai furnitur, ikut absensi/rapat, makan, minum, menggunakan WC, dan menerima client. Perilaku karakter serta client berjalan dengan aturan scripted; tidak ada AI API.
+
+## Pembaruan desain 0.9.0
+
+Seluruh kantor memakai lantai kayu bertekstur, dinding cream, bingkai biru gelap, jendela skyline, lampu gantung, kain sofa lembut, dan tanaman berdaun. Tata ruang, titik kursi, tangga, serta cerita proyek tetap memakai koordinat simulasi bersama. WC dipisah menjadi **WC Wanita** dan **WC Pria**; staf dan avatar mengikuti jenis kelamin profil masing-masing.
+
+Di **Studio visual > Buat karakter sendiri**, isi nama, pilih **Pria** atau **Wanita**, lalu pilih **Buat & pakai**. Karakter menjadi pilihan avatar Founder, tanpa menambah staf kantor. Sesuaikan wajah, rambut, pakaian, dan warna; pilih **Simpan penampilan ke karakter ini** untuk memperbarui preset, lalu **Mainkan avatar ini di kantor**. Maksimal delapan preset tersimpan lokal pada browser/perangkat yang sama. Pilihan **Karakter tersimpan** memuat kembali preset.
 
 ## Proyek pertama: ulang tahun Dani
 
@@ -39,7 +45,7 @@ pnpm preview
 
 `pnpm test` menjalankan pemeriksaan simulasi/navigasi yang tersedia. `pnpm build` memeriksa TypeScript dan membuat folder `dist`; `pnpm preview` membuka hasil build lokal.
 
-Pemeriksaan rilis 0.7.0 pada 13 Oktober 2026: **77 tes lulus**, build berhasil, serta kantor dan Studio dimuat di preview produksi tanpa error/warning console. Snapshot renderer dan batas pengukurannya dicatat di [QA.md](QA.md).
+Pemeriksaan rilis 0.9.0 pada 16 Oktober 2026: **82 tes lulus**, build berhasil, serta kantor dan Studio dimuat di preview produksi tanpa error/warning console. Snapshot renderer dan batas pengukurannya dicatat di [QA.md](QA.md).
 
 ## Mencoba fondasi visual
 

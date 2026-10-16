@@ -12,13 +12,17 @@ import { RoundedBlock, SkyArtwork, FourPointStar } from './VisualPrimitives';
 import { StaticFurnitureBatch } from './StaticFurnitureBatch';
 
 const wood = PALETTE.wood, cream = PALETTE.cream, metal = '#637C99';
+const leafShape=new THREE.Shape();leafShape.moveTo(0,0);leafShape.bezierCurveTo(-.32,.3,-.3,.72,0,1);leafShape.bezierCurveTo(.25,.68,.31,.27,0,0);
+const leafGeometry=new THREE.ShapeGeometry(leafShape,6);
+const leafMaterials=[PALETTE.leaf,'#75875D','#42674E'].map(color=>new THREE.MeshStandardMaterial({color,roughness:.94,side:THREE.DoubleSide}));
+const upholstery:Record<string,string>={'#83a7c1':'#8AA3AA','#83a7c2':'#8AA3AA','#83a5be':'#96A6AA','#7399b7':'#6D8D99','#91b2c8':'#9EAFA9','#96b7cd':'#A6AEAB','#8297b4':'#8299A1','#96b7c1':'#A3B6B1','#6486a8':'#68808B','#52779c':'#526D7B','#87a7c4':'#9BAEB3','#7898b8':'#8CA2AC','#9abfd9':'#A7B9BB','#7fa3a5':'#92AAA1'};
 const woodColors = new Set([wood, PALETTE.woodLight, PALETTE.woodDark, '#c5a17b', '#cfaf88', '#b99873', '#c3a17d', '#a98560', '#cbaa84']);
 type Vec3 = [number, number, number];
 
 
 function Box({ position, size, color, radius = .018, metalness = 0, fabric = false }: { position: Vec3; size: Vec3; color: string; radius?: number; metalness?: number; fabric?: boolean }) {
   const surface = woodColors.has(color) ? 'wood' : fabric ? 'fabric' : metalness ? 'trim' : 'plaster';
-  return <RoundedBlock position={position} size={size} color={woodColors.has(color) ? (color === '#a98560' ? PALETTE.woodDark : color === '#cfaf88' ? PALETTE.woodLight : color) : color} radius={radius} surface={surface} metalness={metalness} />;
+  return <RoundedBlock position={position} size={size} color={woodColors.has(color) ? (color === '#a98560' ? PALETTE.woodDark : color === '#cfaf88' ? PALETTE.woodLight : color) : fabric?(upholstery[color]??color):color} radius={radius} surface={surface} metalness={metalness} />;
 }
 
 function Cylinder({ position, radius, height, color, bottom = radius }: { position: Vec3; radius: number; height: number; color: string; bottom?: number }) {
@@ -37,10 +41,10 @@ function Sign({ text, width, height, color = PALETTE.midnight, background = PALE
 }
 
 export function OfficePlant({ position, small = false }: { position: Vec3; small?: boolean }) {
-  return <group position={position} scale={small ? 0.42 : 1}>
+  return <group position={position} scale={small ? 0.32 : 1}>
     <Cylinder position={[0, 0.24, 0]} radius={0.19} bottom={0.145} height={0.43} color={PALETTE.sand} />
     <Cylinder position={[0, 0.465, 0]} radius={0.17} height={0.025} color="#6e5c47" />
-    {[0, 1, 2, 3, 4].map((i) => <group key={i} rotation={[0, i * 2.1, 0]}><Cylinder position={[0.035, 0.68 + i * 0.045, 0]} radius={0.016} height={0.54 + i * 0.035} color="#59785d" /><mesh position={[0.1, 0.8 + i * 0.075, 0]} rotation={[0, 0, -0.7]} scale={[0.55, 1.3, 0.38]} castShadow><sphereGeometry args={[0.19, 10, 8]} /><meshStandardMaterial color={i % 2 ? PALETTE.leaf : '#A4BE96'} roughness={0.95} /></mesh></group>)}
+    {Array.from({length:9},(_,i)=><group key={i} rotation={[0,i*2.4,0]}><Cylinder position={[.035,.68+i*.027,0]} radius={.009} height={.49+i*.027} color="#647452"/><mesh position={[.07,.64+i*.042,0]} rotation={[.18,0,-.55]} scale={[.45,.59+(i%3)*.08,1]} geometry={leafGeometry} material={leafMaterials[i%3]} castShadow dispose={null}/></group>)}
   </group>;
 }
 
@@ -63,11 +67,11 @@ export function OfficeChair({ position, rotation, color = '#83a7c1', dining = fa
 export function ComputerDesk({ position, rotation, variant }: { position: Point; rotation: number; variant: number }) {
   return <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]}>
     <Box position={[0, 0.78, 0]} size={[1.45, 0.09, 0.76]} color={wood} radius={0.044} />
-    {[-0.64, 0.64].map((x) => <group key={x}><Box position={[x, 0.4, 0]} size={[0.055, 0.72, 0.55]} color={cream} radius={0.018} /><Box position={[x, 0.055, 0]} size={[0.12, 0.045, 0.62]} color={metal} radius={0.01} /></group>)}
+    {[-0.64, 0.64].map((x) => <group key={x}><Box position={[x, 0.4, 0]} size={[0.055, 0.72, 0.55]} color={PALETTE.midnight} radius={0.018} /><Box position={[x, 0.055, 0]} size={[0.12, 0.045, 0.62]} color={metal} radius={0.01} /></group>)}
     <Box position={[0, 0.92, -0.19]} size={[0.045, 0.23, 0.045]} color="#586a72" />
     <Box position={[0, 0.842, -0.19]} size={[0.28, 0.027, 0.17]} color="#63777f" radius={0.01} />
-    <Box position={[0, 1.125, -0.19]} size={[0.59, 0.37, 0.055]} color={PALETTE.midnight} radius={0.025} />
-    <Box position={[0, 1.13, -0.157]} size={[0.535, 0.305, 0.012]} color="#263b47" radius={0.009} />
+    <Box position={[0, 1.19, -0.19]} size={[0.76, 0.46, 0.055]} color={PALETTE.midnight} radius={0.025} />
+    <Box position={[0, 1.19, -0.157]} size={[0.7, 0.4, 0.012]} color="#263b47" radius={0.009} />
     <Box position={[-0.11, 0.837, 0.21]} size={[0.44, 0.025, 0.16]} color="#71818a" radius={0.01} />
     {Array.from({ length: 3 }, (_, row) => <Box key={row} position={[-0.11, 0.854, 0.163 + row * 0.044]} size={[0.38, 0.006, 0.021]} color="#dee5e1" />)}
     <Box position={[0.365, 0.833, 0.19]} size={[0.24, 0.011, 0.24]} color="#7f9aa3" radius={0.02} />
@@ -80,6 +84,7 @@ export function ComputerDesk({ position, rotation, variant }: { position: Point;
     {variant === 1 && <><Box position={[0.44, 0.837, -0.29]} size={[0.19, 0.028, 0.11]} color="#bd9bb5" /><Box position={[0.43, 0.857, -0.29]} size={[0.02, 0.01, 0.1]} color="#ede4d0" /></>}
     {variant === 3 && <Cylinder position={[-0.56, 0.97, -0.23]} radius={0.043} height={0.25} color="#a5bec1" />}
     {variant === 5 && <Box position={[-0.54, 0.946, -0.24]} size={[0.13, 0.24, 0.1]} color="#506977" />}
+    <OfficePlant position={[.56,.83,-.22]} small/>
   </group>;
 }
 
@@ -109,8 +114,8 @@ function SharedTable({ dining = false, client = false }: { dining?: boolean; cli
 function KitchenCounter() {
   return <>
     <group position={[1.3, 0, -2.75]}>
-      <Box position={[0, .53, 0]} size={[2, .82, .55]} color="#6c95b4" radius={.025} /><Box position={[0, .98, 0]} size={[2, .08, .55]} color="#e6edf0" radius={.02} />
-      {[-.3, .3].map((x) => <group key={x}><Box position={[x, .57, .26]} size={[.54, .68, .025]} color="#86a8c3" radius={.015} /><Box position={[x, .82, .285]} size={[.16, .018, .026]} color="#c5d9e7" /></group>)}
+      <Box position={[0, .53, 0]} size={[2, .82, .55]} color="#446777" radius={.025} /><Box position={[0, .98, 0]} size={[2, .08, .55]} color="#e6edf0" radius={.02} />
+      {[-.3, .3].map((x) => <group key={x}><Box position={[x, .57, .26]} size={[.54, .68, .025]} color="#8B9F9E" radius={.015} /><Box position={[x, .82, .285]} size={[.16, .018, .026]} color="#c5d9e7" /></group>)}
       <Box position={[.26, 1.04, -.01]} size={[.46, .025, .34]} color="#547286" radius={.018} />{[-.1, .15].map((z) => <mesh key={z} position={[.26, 1.06, z]} rotation={[-Math.PI / 2, 0, 0]}><torusGeometry args={[.073, .012, 6, 14]} /><meshStandardMaterial color="#a4b9c5" metalness={.25} /></mesh>)}
       <Cylinder position={[.26, 1.14, -.1]} radius={.093} height={.14} color="#b0c2c9" /><Box position={[.37, 1.14, -.1]} size={[.09, .025, .035]} color="#657b8a" />
       <Box position={[-.3, 1.027, -.01]} size={[.43, .017, .32]} color="#b5cad4" radius={.015} /><Box position={[-.3, 1.04, -.01]} size={[.28, .008, .2]} color="#71939f" radius={.008} />
@@ -232,7 +237,7 @@ function Restroom({ id }: { id: number }) {
       <Box position={[.15, .985, -.25]} size={[.066, .018, .026]} color="#92aabb" metalness={.5} />
     </group>
     <group position={[.95, 0, -.8]}><Box position={[0, .48, 0]} size={[.31, .73, .42]} color="#82a5bf" radius={.025} /><Box position={[0, .86, 0]} size={[.35, .09, .5]} color="#e6eff5" radius={.045} /><mesh position={[0, .907, .04]} rotation={[-Math.PI / 2, 0, 0]} scale={[.75, 1, 1]}><circleGeometry args={[.125, 18]} /><meshStandardMaterial color="#96b7c5" /></mesh><mesh position={[0, 1.0, -.16]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[.085, .014, 6, 14, Math.PI]} /><meshStandardMaterial color="#b4c5cc" metalness={.6} roughness={.23} /></mesh><Box position={[0, 1.29, -.245]} size={[.32, .48, .03]} color="#95b9ce" radius={.015} /><Box position={[0, 1.29, -.224]} size={[.27, .43, .014]} color="#c7e2ed" metalness={.55} /></group>
-    <group position={[-.75, 1.32, -2.7]}><Sign text={id === 9 ? 'WC 01  /  PRIVATE' : 'WC 02  /  PRIVATE'} width={.92} height={.2} /></group>
+    <group position={[-.75, 1.32, -2.7]}><Sign text={id === 9 ? 'WC WANITA' : 'WC PRIA'} width={.92} height={.2} /></group>
     {[-1.1, 1.1].map((x) => <Box key={x} position={[x, .2, -1.8]} size={[.035, .07, 1.9]} color="#7a9fb8" />)}
   </>;
 }
@@ -251,17 +256,17 @@ export function OfficeFurnishings({ room }: { room: Room }) {
     {room.id === 12 && [8, 9].map(index => <OfficeChair key={index} {...workSeat(index)} color="#7fa3a5" dining />)}
     <group position={[room.center[0], 0, room.center[1]]} rotation={[0, roomRotation(room.id), 0]}>
       {room.id === 0 && <><LobbyLounge /><Rug width={3.5} depth={2.8} color="#d4e4ee" z={-.1} /><WallShelf x={-4.8} z={-2.3} width={1.5} depth={.55} books /><OfficePlant position={[5.55, 0, 2.25]} /><OfficePlant position={[5.55, 0, -2.25]} /><group position={[0, 1.5, -3.02]} rotation={[0, Math.PI, 0]}><Sign text="WELCOME TO YOUR LITTLE SPACE" width={3.4} height={.32} /></group><group position={[-3.6, 1.5, -3.02]} rotation={[0, Math.PI, 0]}><SkyArtwork position={[0, 0, 0]} width={1.8} height={.9} /></group><group position={[3.2, 1.3, -3.02]} rotation={[0, Math.PI, 0]}><Sign text="MEET  ·  CREATE  ·  BELONG" width={2.2} height={.26} /></group></>}
-      {room.id === 1 && <><Rug width={11.2} depth={5.3} color="#cbdfeb" z={.1} /><WallShelf x={5.5} z={-2.45} width={1} depth={.45} books /><group position={[-3.85, 1.53, -3.02]}><Sign text="CREATE  ·  CONNECT  ·  GROW" width={1.53} height={.25} /></group>{[-3.9, 0, 3.9].map((x) => <Box key={x} position={[x, .031, .08]} size={[.02, .005, 3.38]} color="#b7d0e1" />)}</>}
-      {room.id === 2 && <><Rug width={4.8} depth={4.9} color="#cfdfeb" z={-.15} /><SharedTable /><group position={[0, 1.43, -3.02]}><Box position={[0, 0, 0]} size={[1.72, .85, .065]} color="#8da8bd" radius={.025} /><Box position={[0, 0, .04]} size={[1.6, .74, .017]} color="#e7f0f6" /><group position={[0, .24, .055]}><Sign text="TEAM IDEAS" width={1.3} height={.13} /></group>{[0, 1, 2].map((i) => <Box key={i} position={[-.47 + i * .37, -.14 + i * .07, .06]} size={[.2, .2 + i * .1, .015]} color={['#a7c5d7', '#739cb7', '#4d789d'][i]} />)}</group></>}
-      {room.id === 3 && <><FounderSofa /><Rug width={4.9} depth={3.65} color="#C5D8E5" z={.55} /><ProjectCoffeeTable /><WallShelf x={2.65} z={-2.55} width={.55} depth={.45} books /><group position={[-.55, 1.6, -3.02]}><Sign text="BLUE AND SPACE  /  FOUNDER" width={2.55} height={.31} background={PALETTE.midnight} color={PALETTE.sand} /></group></>}
+      {room.id === 1 && <><Rug width={7.7} depth={3.9} color="#a6b9b6" z={.1} /><WallShelf x={5.5} z={-2.45} width={1} depth={.45} books /><group position={[-3.85, 1.53, -3.02]}><Sign text="CREATE  ·  CONNECT  ·  GROW" width={1.53} height={.25} /></group>{[-3.9, 0, 3.9].map((x) => <Box key={x} position={[x, .031, .08]} size={[.02, .005, 3.38]} color="#b7d0e1" />)}</>}
+      {room.id === 2 && <><Rug width={4.8} depth={4.9} color="#A4B6BB" z={-.15} /><SharedTable /><group position={[0, 1.43, -3.02]}><Box position={[0, 0, 0]} size={[1.72, .85, .065]} color="#8da8bd" radius={.025} /><Box position={[0, 0, .04]} size={[1.6, .74, .017]} color="#e7f0f6" /><group position={[0, .24, .055]}><Sign text="TEAM IDEAS" width={1.3} height={.13} /></group>{[0, 1, 2].map((i) => <Box key={i} position={[-.47 + i * .37, -.14 + i * .07, .06]} size={[.2, .2 + i * .1, .015]} color={['#a7c5d7', '#739cb7', '#4d789d'][i]} />)}</group></>}
+      {room.id === 3 && <><FounderSofa /><Rug width={4.9} depth={3.65} color="#A4B4B5" z={.55} /><ProjectCoffeeTable /><WallShelf x={2.65} z={-2.55} width={.55} depth={.45} books /><group position={[-.55, 1.6, -3.02]}><Sign text="BLUE AND SPACE  /  FOUNDER" width={2.55} height={.31} background={PALETTE.midnight} color={PALETTE.sand} /></group></>}
       {room.id === 4 && <><Rug width={4.9} depth={3.4} color="#d5e6ef" z={.3} /><SmallTable x={HR_TABLE_LOCAL[0]} z={HR_TABLE_LOCAL[1]} width={HR_TABLE_SIZE[0]} depth={HR_TABLE_SIZE[1]} /><WallShelf x={2.65} z={-2.1} width={.45} depth={.8} books /><group position={[0, 1.56, -3.02]}><Sign text="PEOPLE & GROWTH" width={2.7} height={.29} /></group></>}
       {room.id === 5 && <><Rug width={4.25} depth={5.6} color="#d7e5ec" z={.1} /><SharedTable dining /><KitchenCounter /></>}
       {room.id === 6 && <><Rug width={5.1} depth={2.3} color="#bdcfdf" z={.86} /><ServerRack x={-2.3} /><ServerRack x={-1.35} /><group position={[-.75, 2.15, -1.3]}><Sign text="DATABASE  /  SYSTEMS" width={1.8} height={.2} background="#416b89" color="#e6f3fa" /></group></>}
       {room.id === 7 && <><Rug width={4.9} depth={3.5} color="#ccdeeb" z={.25} /><WallShelf x={2.65} z={-2.45} width={.5} depth={.65} books /><group position={[0, 1.54, -3.02]}><Sign text="OPERATIONS" width={2.25} height={.29} /></group></>}
-      {room.id === 8 && <><Rug width={4.9} depth={3.6} color="#d2e1eb" z={.5} /><LibraryBooks /><SmallTable width={3.6} depth={.9} z={-.5} reading /><group position={[0, 1.62, -3.02]}><Sign text="A LITTLE SPACE TO THINK" width={2.45} height={.3} /></group></>}
-      {room.id === 11 && <><Rug width={4.3} depth={4.65} color="#d9d9e9" z={-.05} /><SharedTable client /><WallShelf x={2.7} z={-1.7} width={.42} depth={.5} books /><group position={[0, 1.58, -3.02]}><Sign text="CLIENT MEETINGS" width={2.3} height={.29} /></group></>}
+      {room.id === 8 && <><Rug width={4.9} depth={3.6} color="#BBC0AC" z={.5} /><LibraryBooks /><SmallTable width={3.6} depth={.9} z={-.5} reading /><group position={[0, 1.62, -3.02]}><Sign text="A LITTLE SPACE TO THINK" width={2.45} height={.3} /></group></>}
+      {room.id === 11 && <><Rug width={4.3} depth={4.65} color="#AAA8B3" z={-.05} /><SharedTable client /><WallShelf x={2.7} z={-1.7} width={.42} depth={.5} books /><group position={[0, 1.58, -3.02]}><Sign text="CLIENT MEETINGS" width={2.3} height={.29} /></group></>}
       {room.id === 12 && <StorageRoom />}
-      {[9, 10].includes(room.id) && <><Restroom id={room.id} />{[-.8, 0, .8].flatMap((x) => [-1.8, -.9, 0, .9, 1.8].map((z) => <Box key={`${x}${z}`} position={[x, .005, z]} size={[.74, .008, .8]} color={(Math.round(z * 10) + Math.round(x * 10)) % 2 ? '#d0e2ed' : '#e5eff5'} />))}</>}
+      {[9, 10].includes(room.id) && <><Restroom id={room.id} />{[-.8, 0, .8].flatMap((x) => [-1.8, -.9, 0, .9, 1.8].map((z) => <Box key={`${x}${z}`} position={[x, .005, z]} size={[.74, .008, .8]} color={(Math.round(z * 10) + Math.round(x * 10)) % 2 ? '#DAD4C6' : '#ECE6D7'} />))}</>}
       {[0, 1, 3, 4, 7, 8].includes(room.id) && <group position={[room.width / 2 - .1, 1.15, room.id === 1 ? .1 : .85]} rotation={[0, -Math.PI / 2, 0]}><SkyArtwork position={[0, 0, 0]} width={room.id === 1 ? 1.12 : .8} height={.62} /></group>}
       {[1, 2, 3, 5, 7, 8].includes(room.id) && <OfficePlant position={[-room.width / 2 + .38, .13, -room.depth / 2 + .72]} small={room.id === 8} />}
     </group>

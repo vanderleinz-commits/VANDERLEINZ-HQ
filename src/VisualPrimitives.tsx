@@ -2,30 +2,16 @@ import { useMemo } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { PALETTE, SURFACES } from './artDirection';
+import { materialMap } from './visualTextures';
 
 export type Vec3 = [number, number, number];
 type Surface = keyof typeof SURFACES;
 // Repeated furniture parts share GPU resources across rooms and floor changes.
 const geometries = new Map<string, THREE.BufferGeometry>();
 const materials = new Map<string, THREE.MeshStandardMaterial>();
-const woodMaps = new Map<string, THREE.CanvasTexture>();
-
-function woodMap(color: string) {
-  if (woodMaps.has(color)) return woodMaps.get(color)!;
-  const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 128;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = color; ctx.fillRect(0, 0, 256, 128);
-  for (let i = 0; i < 32; i++) {
-    const y = i * 4 + Math.sin(i * 1.7);
-    ctx.strokeStyle = i % 3 === 0 ? 'rgba(86,54,28,.09)' : 'rgba(255,247,226,.09)';
-    ctx.lineWidth = .7;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.bezierCurveTo(78, y + Math.sin(i) * 2, 174, y - Math.cos(i) * 2, 256, y); ctx.stroke();
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace; texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  woodMaps.set(color, texture); return texture;
-}
-
+const archShape=new THREE.Shape();archShape.moveTo(-.35,-.5);archShape.lineTo(.35,-.5);archShape.lineTo(.35,.05);archShape.absarc(0,.05,.35,0,Math.PI,false);archShape.closePath();
+const archGeometry=new THREE.ShapeGeometry(archShape,12);
+const archMaterials=[PALETTE.corporate,PALETTE.sky].map(color=>new THREE.MeshStandardMaterial({color,roughness:.95}));
 export function RoundedBlock({ position, size, color, radius = .02, metalness, surface = 'plaster', roughness }: {
   position: Vec3; size: Vec3; color: string; radius?: number; metalness?: number; surface?: Surface; roughness?: number;
 }) {
@@ -39,7 +25,7 @@ export function RoundedBlock({ position, size, color, radius = .02, metalness, s
     const m = metalness ?? SURFACES[surface].metalness, r = roughness ?? SURFACES[surface].roughness;
     const key = `${color}:${surface}:${r}:${m}`;
     if (!materials.has(key)) materials.set(key, new THREE.MeshStandardMaterial({
-      color: surface === 'wood' ? '#ffffff' : color, map: surface === 'wood' ? woodMap(color) : null,
+      color: ['wood','fabric','stone'].includes(surface) ? '#ffffff' : color, map: surface === 'wood'||surface==='fabric'||surface==='stone' ? materialMap(surface,color) : null,
       roughness: r, metalness: m,
     }));
     return materials.get(key)!;
@@ -51,10 +37,10 @@ export function RoundedBlock({ position, size, color, radius = .02, metalness, s
 export function SkyArtwork({ position, width = .95, height = .68 }: { position: Vec3; width?: number; height?: number }) {
   return <group position={position}>
     <RoundedBlock position={[0, 0, 0]} size={[width + .09, height + .09, .055]} color={PALETTE.woodLight} surface="wood" radius={.035} />
-    <RoundedBlock position={[0, 0, .033]} size={[width, height, .014]} color={PALETTE.sky} radius={.018} />
+    <RoundedBlock position={[0, 0, .033]} size={[width, height, .014]} color={PALETTE.cream} radius={.018} />
     <mesh position={[width * .25, height * .2, .049]}><circleGeometry args={[height * .13, 16]} /><meshStandardMaterial color={PALETTE.sand} roughness={.92} /></mesh>
-    {[-1, 1].map((side) => <mesh key={side} position={[side * width * .22, -height * .1 + side * .035, .052]} scale={[2.25, .7, .15]}><sphereGeometry args={[height * .1, 12, 8]} /><meshStandardMaterial color={PALETTE.cream} roughness={1} /></mesh>)}
-    <RoundedBlock position={[0, -height * .28, .045]} size={[width * .9, height * .12, .018]} color={PALETTE.corporate} radius={.015} />
+    <mesh position={[-width*.1,0,.052]} scale={[width*.9,height*.9,1]} geometry={archGeometry} material={archMaterials[0]} dispose={null}/>
+    <mesh position={[width*.22,-height*.19,.055]} scale={[width*.55,height*.55,1]} geometry={archGeometry} material={archMaterials[1]} dispose={null}/>
   </group>;
 }
 

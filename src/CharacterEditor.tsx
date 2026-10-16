@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { characterProfile, resetCharacterAppearance, updateCharacterAppearance } from './characterProfiles';
 import type { CharacterAppearance } from './characterProfiles';
 import { useCharacterRevision } from './useCharacterRevision';
@@ -16,6 +16,7 @@ function CharacterEditorFields({ index }: { index: number }) {
   const profile = characterProfile(index);
   const [name, setName] = useState(profile.name);
   const [status, setStatus] = useState('Perubahan visual langsung terlihat di kantor.');
+  useEffect(()=>setName(profile.name),[profile.name]);
   const edit = (patch: Partial<CharacterAppearance>) => {
     const saved = updateCharacterAppearance(index, patch);
     if (patch.name !== undefined) setName(characterProfile(index).name);
@@ -28,6 +29,7 @@ function CharacterEditorFields({ index }: { index: number }) {
       <div className="character-name-field"><input id="character-name" value={name} maxLength={24} onChange={event => setName(event.target.value)} /><button type="submit">Simpan nama</button></div>
     </form>
     <div className="character-editor-selects">
+      <label>Jenis kelamin<select value={profile.gender} onChange={event=>edit({gender:event.target.value as CharacterAppearance['gender']})}><option value="male">Pria</option><option value="female">Wanita</option></select></label>
       <label>Model rambut<select value={profile.hairStyle} onChange={event => edit({ hairStyle: event.target.value as CharacterAppearance['hairStyle'] })}>
         <option value="sidepart">Belah samping</option><option value="bob">Bob</option><option value="ponytail">Kuncir</option><option value="curls">Keriting</option><option value="quiff">Quiff</option><option value="bun">Sanggul</option><option value="textured">Pendek bertekstur</option>
       </select></label>

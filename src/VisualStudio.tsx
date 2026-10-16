@@ -7,6 +7,7 @@ import type { CharacterExpression, Pose } from './CharacterRig';
 import { characterProfiles, EMPLOYEE_PROFILE_COUNT, OWNER_PROFILE_INDEX } from './characterProfiles';
 import { useCharacterRevision } from './useCharacterRevision';
 import { CharacterEditor } from './CharacterEditor';
+import { AvatarCreator } from './AvatarCreator';
 import { OfficeChair, OfficePlant, ComputerDesk } from './OfficeArchitecture';
 import { BRAND, CHARACTER_STANDARD, GRAPHICS, PALETTE } from './artDirection';
 import type { GraphicsQuality } from './artDirection';
@@ -27,8 +28,8 @@ const POSES: { pose: Pose; label: string }[] = [
 ];
 const COLORS = [PALETTE.midnight, PALETTE.corporate, PALETTE.sky, PALETTE.cloud, PALETTE.sand, PALETTE.lavender, PALETTE.teal];
 
-export default function VisualStudio({ quality, reducedMotion, onClose }: {
-  quality: GraphicsQuality; reducedMotion: boolean; onClose: () => void;
+export default function VisualStudio({ quality, reducedMotion, onClose, onPlayAvatar }: {
+  quality: GraphicsQuality; reducedMotion: boolean; onClose: () => void; onPlayAvatar:()=>void;
 }) {
   useCharacterRevision();
   const [selected, setSelected] = useState(1);
@@ -69,16 +70,18 @@ export default function VisualStudio({ quality, reducedMotion, onClose }: {
     </header>
     <div className="studio-layout">
       <aside className="studio-controls">
+        <AvatarCreator onChoose={()=>{setSelected(OWNER_PROFILE_INDEX);setLineup(false);setPose('idle');setSeated(false);setCamera('portrait');}}/>
         <div className="eyebrow">PEOPLE OF BLUE AND SPACE</div>
         <div className="studio-character-list" role="group" aria-label="Preview character">
           {characterProfiles.map((person, i) => <button key={i} aria-pressed={selected === i} onClick={() => { setSelected(i); setLineup(false); }}><span style={{ background: person.color }} aria-hidden="true" />{person.name}{i === OWNER_PROFILE_INDEX ? ' · Avatar' : ''}</button>)}
         </div>
         <div className="studio-note"><strong>{profile.name} · {profile.role}</strong><p>Sesuaikan penampilannya di bawah.</p><small>{profile.personality}</small></div>
         <CharacterEditor index={selected} />
+        {selected===OWNER_PROFILE_INDEX&&<button className="avatar-play-button" onClick={onPlayAvatar}>Mainkan avatar ini di kantor →</button>}
         <div className="eyebrow">GERAKAN</div>
         <div className="studio-pose-list" role="group" aria-label="Animation pose">{POSES.map(item => <button key={item.pose} aria-pressed={pose === item.pose} onClick={() => choosePose(item.pose)}>{item.label}</button>)}</div>
         <div className="eyebrow">EKSPRESI</div>
-        <div className="studio-expression-list" role="group" aria-label="Facial expression">{([['neutral','Tenang'],['happy','Senang'],['focused','Fokus']] as const).map(([value,label]) => <button key={value} aria-pressed={expression === value} onClick={() => setExpression(value)}>{label}</button>)}</div>
+        <div className="studio-expression-list" role="group" aria-label="Facial expression">{([['neutral','Tenang'],['happy','Senang'],['focused','Fokus'],['tired','Lelah'],['stressed','Stres'],['angry','Kesal']] as const).map(([value,label]) => <button key={value} aria-pressed={expression === value} onClick={() => setExpression(value)}>{label}</button>)}</div>
         <label className="studio-toggle"><input type="checkbox" checked={seated && !lineup && poseCanSit} disabled={lineup || !poseCanSit} onChange={event => setSeated(event.target.checked)} /> Duduk di kursi kantor</label>
         <label className="studio-toggle"><input type="checkbox" checked={lineup} onChange={event => { setLineup(event.target.checked); setCamera('director'); }} /> Bandingkan sepuluh siluet tim</label>
         <label className="studio-toggle"><input type="checkbox" checked={playing} onChange={event => setPlaying(event.target.checked)} /> Putar animasi</label>
